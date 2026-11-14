@@ -5,6 +5,7 @@ import com.github.xandergos.terraindiffusionmc.world.HeightConverter;
 import com.lmaxrouter.terraindiffusionhorizons.TdConfig;
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.api.enums.worldGeneration.EDhApiDistantGeneratorMode;
+import com.seibel.distanthorizons.api.enums.worldGeneration.EDhApiWorldGenerationStep;
 import com.seibel.distanthorizons.api.enums.worldGeneration.EDhApiWorldGeneratorReturnType;
 import com.seibel.distanthorizons.api.interfaces.block.IDhApiBiomeWrapper;
 import com.seibel.distanthorizons.api.interfaces.block.IDhApiBlockStateWrapper;
@@ -174,7 +175,8 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                 }
                 if (coverTop < maxY) {
                     points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, coverTop, maxY, airBlock, fillerBiome));
-                }
+// 4 参显式版: 3 参 default 已弃用, 其字节码转发本调用时 step 固定 SURFACE (javap 实证, 同值替换行为无损)
+dataSource.setApiDataPointColumn(x, z, EDhApiWorldGenerationStep.SURFACE, points);
                 dataSource.setApiDataPointColumn(x, z, points);
             }
         }
