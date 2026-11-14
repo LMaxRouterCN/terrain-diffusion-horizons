@@ -175,9 +175,9 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                 }
                 if (coverTop < maxY) {
                     points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, coverTop, maxY, airBlock, fillerBiome));
-// 4 参显式版: 3 参 default 已弃用, 其字节码转发本调用时 step 固定 SURFACE (javap 实证, 同值替换行为无损)
-dataSource.setApiDataPointColumn(x, z, EDhApiWorldGenerationStep.SURFACE, points);
-                dataSource.setApiDataPointColumn(x, z, points);
+                }
+                // 4 参显式版: 3 参 default 已弃用, 其字节码转发 4 参时 step 固定 SURFACE (javap 实证, 同值替换行为无损)
+                dataSource.setApiDataPointColumn(x, z, EDhApiWorldGenerationStep.SURFACE, points);
             }
         }
         // 全列完成, 恰一次回执 (官方模板收尾)
