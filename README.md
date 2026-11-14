@@ -1,4 +1,4 @@
-# Distant Diffusion
+# Terrain Diffusion Horizons
 
 Distant Horizons 的 LOD 加速生成模组: 用 Terrain Diffusion 的推理管线直供远景数据, 替代逐 chunk 模拟+降采样.
 

@@ -1,13 +1,13 @@
-# Distant Diffusion - GOAL-PLAN
+# Terrain Diffusion Horizons - GOAL-PLAN
 
 ## 一句话
 接管 Distant Horizons 的 LOD 远距生成, 用 terrain-diffusion 管线批量推理直供数据点, 替代 vanilla chunk 生成+降采样, 数量级提速.
 
 ## 身份坐标
-- 名字: Distant Diffusion (= Distant Horizons + Terrain Diffusion 各取一词)
-- modid: distantdiffusion
-- 包名: com.lmaxrouter.distantdiffusion
-- 目录: D:\Documents\mcmod\Distant-Diffusion
+- 名字: Terrain Diffusion Horizons (= Terrain Diffusion 全名 + Distant Horizons 后半; 2026-11-14 max 定名, 前案 Distant Diffusion 因品牌可识别度不足被否决)
+- modid: terraindiffusionhorizons
+- 包名: com.lmaxrouter.terraindiffusionhorizons
+- 目录: D:\Documents\mcmod\Terrain Diffusion Horizons
 - 目标环境: MC 1.20.1 Forge + DH 2.3.2-b (forge-fabric 版)
 - 许可证: MPL-2.0 (正式文本待补)
 - 版本: 0.1.0 起, 三位式
