@@ -109,3 +109,14 @@
 - 烟雾启动 = 裸 runClient (不带 DH/TD): 验证壳 + mods.toml 解析 + 无宿主退化路径
 - 待验证 (S2b 运行时): DH modid 是否 "distanthorizons"; TD fml id "terrain_diffusion_mc" 已从源实证
 - 遗留: LICENSE 已定稿 (MPL-2.0 全文, mozilla.org 正源); 首构建时间由 max 醒后拍板
+
+## S2b 前置 API 签名案卷 (2026-11-14 夜, javap 实证)
+- generateLod 全签名: generateLod(int x, int z, int minX, int minZ, byte detailLevel,
+    IDhApiFullDataSource, EDhApiDistantGeneratorMode, ExecutorService, Consumer<IDhApiFullDataSource>)
+    返回 CompletableFuture<Void> (参数名是猜测, 排序实证; [待验证-S2b 运行时])
+- DhApiTerrainDataPoint.create(detailLevel, blockLight, skyLight, bottomY, topY, blockStateWrapper, biomeWrapper)
+    静态工厂唯一入口 (构造器私有), 7 字段全公开 final
+- DhApi.worldGenOverrides: IDhApiWorldGeneratorOverrideRegister 实例字段 (S1 已查注册器: DH.isClientOnly() 检查 + currentLevelWrapper != null 后 register)
+- IDhApiWorldGenerator 抽象方法仅 2: preGeneratorTaskStart() + close(); generateLod 为 default, override 才有产出
+- IDhApiFullDataSource 写面 (setApiDataPointColumn) 待 S2b 开工首读
+- 彩蛋: DhApi.HEY_YOU_YOURE_FINALLY_AWAKE 字符串常量, 验证回调可用
