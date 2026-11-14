@@ -69,6 +69,8 @@ tasks.withType(Javadoc).configureEach {
 
 // mods.toml 变量展开 (与 TD fork processResources 机制同构)
 processResources {
+    // expand 模板读写钉 UTF-8: 默认随 JVM (本机 GBK) 会把多字节中文按 GBK 配对腰斩成不可逆 '?' [S2b 字节级实证]
+    filteringCharset = 'UTF-8'
     def expandProps = [
             'version'                   : version,
             'group'                     : project.group,
