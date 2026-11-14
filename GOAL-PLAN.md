@@ -181,8 +181,8 @@
 
 ## S2b 进度
 - [x] 侦查封箱 (本案卷)
-- [ ] TdLodTranslator (纯函数: DH 参数 → TD 查询矩形; 列 → 中心块采样)
-- [ ] TdDhWorldGenerator (generateLod = runAsync 壳 + generateInternal 真逻辑)
-- [ ] DhCompat 真注册 (LevelLoad 事件 + 守卫过滤 + worldGenOverrides)
-- [ ] TdConfig (JSON 三键)
-- [ ] build 到绿 → 裸 runClient 烟雾 → 停在 DH+TD 联调线前等 max
+- [x] TdLodTranslator (纯函数: DH 参数 → TD 查询矩形; 列 → 中心块采样)
+- [x] TdDhWorldGenerator (generateLod = runAsync 壳 + generateInternal 真逻辑)
+- [x] DhCompat 真注册 (LevelLoad 事件 + 守卫过滤 + worldGenOverrides)
+- [x] TdConfig (JSON 三键)
+- [ ] 裸 runClient 烟雾 → 停在 DH+TD 联调线前等 max (build 已绿: 96e3e4d 桥接层 + d82470c filteringCharset 编码修复, 产物 jar 严格 UTF-8 双验通过; 烟雾方式 A/C/D 待 max 拍板)
