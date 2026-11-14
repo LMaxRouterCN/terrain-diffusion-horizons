@@ -120,3 +120,65 @@
 - IDhApiWorldGenerator 抽象方法仅 2: preGeneratorTaskStart() + close(); generateLod 为 default, override 才有产出
 - IDhApiFullDataSource 写面 (setApiDataPointColumn) 待 S2b 开工首读
 - 彩蛋: DhApi.HEY_YOU_YOURE_FINALLY_AWAKE 字符串常量, 验证回调可用
+
+## S2b 侦查案卷 (2026-11-15, javap + TD 源码全实证, 定案版)
+
+### generateLod 全参数 (TestGenericWorldGenerator LVT 实名 + WorldGenerationQueue 调用点互证)
+- 签名: generateLod(int chunkPosMinX, int chunkPosMinZ, int posX, int posZ, byte detailLevel,
+  IDhApiFullDataSource dataSource, EDhApiDistantGeneratorMode mode, ExecutorService pool,
+  Consumer&lt;IDhApiFullDataSource&gt; resultConsumer) → CompletableFuture&lt;Void&gt;
+- detailLevel 是 API 级 = core 级 - 6 (调用点实证 getDetailLevel-6); API dl0 = 64 块/列
+- chunkPosMin 单位疑 chunk(16块), posX/posZ 疑数据源 min 角块坐标 → 运行时首调日志定案
+  (换算集中在 TdLodTranslator 单点, 联调时一改全改)
+- 接口 default 体抛 UnsupportedOperationException, 必须 override; preGeneratorTaskStart/close 抽象必实现
+
+### 列写入协议 (官方 generateInternal 黄金模板破译)
+- setApiDataPointColumn(x, z, list): x/z 为数据源内局部索引 [0, getWidthInDataColumns())
+- 列内 list 自底向上无缝平铺; 点七参 (detailLevel, blockLight, skyLight, bottomY, topY, block, biome)
+- 官方双点: 实心 (0,0,15,0,h) + 空气 (0,0,15,h,顶); 顶用 levelWrapper.getMaxHeight() 不抄硬编码 256
+- 全列填完后 resultConsumer.accept(dataSource) 恰一次; 异常时不调 consumer 直接 return
+- wrapper 按字符串获取会抛 IOException, 官方整个包 try-catch
+
+### 注册链 (TestWorldGenBindingEvent 字节码实证)
+- DhApiEventRegister.on(DhApiLevelLoadEvent.class, listener) 挂事件
+- onLevelLoad(param): levelWrapper = param.value.levelWrapper
+- DhApi.worldGenOverrides.registerWorldGeneratorOverride(levelWrapper, generator) — 静态字段 DhApi.worldGenOverrides (非 Delayed 系)
+- levelWrapper.getWrappedMcObject() → ServerLevel: 维度过滤 + worldSeed 捕获入口
+
+### wrapper 入口 (修正 S1 的 WrapperFactory_forge 方案 → API 面优先)
+- DhApi$Delayed.wrapperFactory 静态字段: getBiomeWrapper(String, level) /
+  getDefaultBlockStateWrapper(String, level) / getAirBlockStateWrapper()
+### 档位体系与 TDH 策略 (本轮修正)
+- EDhApiDetailLevel 实值 (core 级): BLOCK=dl0/1块, CHUNK=dl4/16块, REGION=dl9/512块
+- TestGen 声明 [0,12] API 级 = core [6,18] 全接 (测试姿态)
+- TDH 策略: 只供 API dl0 (64 块/列), 粗档交 DH 原生 DOWN_SAMPLED (细→粗)
+  - 理由: 粗档直查 TD = 2^(dl+6) 宽密集块级矩形, dl6 即 16384^2 样本 climate 5ch 直接 GB 级爆内存,
+    TD 无 stride 稀疏查询接口; dl0 一个数据源 = 4096^2 块 ≈ 2 个 hydrology tile, ~200MB 短命可接受
+  - 信息保真: TD 有效分辨率 30m/px (scale1), 64 块采样 ≈ 2:1 欠采样, 无实质损失
+  - largest=0 声明下 DH 对粗档的 DOWN_SAMPLED 行为未实证, 运行时验证; 不行退 [0,12]+分块查询兜底
+
+### TD 侧数据链 (fork 源码实证)
+- getRiverTerrainData(i1, j1, i2, j2, withBiomes): i=Z, j=X, 块坐标 (fetchHeightmap javadoc 原文)
+- RiverTerrainData: elevation float[](米!) / climate float[5ch] / biomeIndexes short[] /
+  waterMask byte[] / waterSurface float[](米) / width(X向) / height(Z向); 一维行主序 idx = z*width + x
+- 值为海拔米, 方块 y = HeightConverter.convertToMinecraftHeight(short):
+  正值 m/resolution + 63; 负值 -sqrt(|m|+10) + sqrt(10) - 1 + 63; resolution = native30/scale
+  (直接复用 TD 类, 不重写公式防漂移; float→short 转换精度 &lt;1m 无害)
+- getSeed() vs ServerLevel.getSeed(): seed-0 兜底防护 (getInstance 窗口期静默错数据风险)
+- WorldScaleManager.isTerrainDiffusionWorldActive(): TD 世界现成判定, 注册守卫用
+- TerrainBiomeRegistry.instance().keyForIndex(short) → Settlement.key()/fallbackKey()/isRiver()/
+  isFrozenRiver(); biome_catalog.json key = 标准 ID (minecraft:plains) — S4 消费
+- 阻塞语义: submitToInferenceThread().get() 无超时, 在 DH 池线程阻塞等 GPU 推理, 正确形态
+
+### S2b 实现范围 (占位版, 真群系/水/表面规则 = S4)
+- 表面占位 stone + plains, JSON 三键可配 (surfaceBlock / fillerBiome / enabled)
+- 首调日志 dump generateLod 全参数 (posX/posZ 单位 + 实际请求档位定案用)
+- seed 不符 → 跳过本数据源 (不调 consumer), 日志限流
+
+## S2b 进度
+- [x] 侦查封箱 (本案卷)
+- [ ] TdLodTranslator (纯函数: DH 参数 → TD 查询矩形; 列 → 中心块采样)
+- [ ] TdDhWorldGenerator (generateLod = runAsync 壳 + generateInternal 真逻辑)
+- [ ] DhCompat 真注册 (LevelLoad 事件 + 守卫过滤 + worldGenOverrides)
+- [ ] TdConfig (JSON 三键)
+- [ ] build 到绿 → 裸 runClient 烟雾 → 停在 DH+TD 联调线前等 max
