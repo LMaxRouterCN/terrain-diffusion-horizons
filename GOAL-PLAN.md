@@ -8,7 +8,7 @@
 - modid: terraindiffusionhorizons
 - 包名: com.lmaxrouter.terraindiffusionhorizons
 - 目录: D:\Documents\mcmod\Terrain Diffusion Horizons
-- 目标环境: MC 1.20.1 Forge + DH 2.3.2-b (forge-fabric 版)
+- 目标环境: MC 1.20.1 Forge + DH 3.3.3 (forge-fabric 版)
 - 许可证: MPL-2.0 (正式文本待补)
 - 版本: 0.1.0 起, 三位式
 
@@ -32,7 +32,7 @@
 - 一个 256px decoder tile 约 15km x 15km, 填数万 LOD 列
 - 推理在 GPU (CMP 30HX, DirectML) 与游戏线程解耦
 
-## DH API 素材 (2.3.2-b, 可行性报告 javap 实锤, S1 复验)
+## DH API 素材 (3.3.3, 可行性报告 javap 实锤, S1 复验)
 - 注册: DhApi.worldGenOverrides.registerWorldGeneratorOverride(IDhApiLevelWrapper, IDhApiWorldGenerator)
 - 路线 A (采用): IDhApiWorldGenerator.generateLod + IDhApiFullDataSource.setApiDataPointColumn
 - 路线 B (弃): AbstractDhApiChunkWorldGenerator chunk 级粒度, 对管线是浪费
@@ -42,7 +42,7 @@
 
 ## 风险清单 (按杀伤力排序)
 1. wrapper 获取 (最大不确定): 数据点要 IDhApiBlockStateWrapper / IDhApiBiomeWrapper 实例, API 未见公开工厂
-   兜底 a: 反射 core 内部工厂 (钉死 2.3.2-b); 兜底 b: 拦截 DhApiBlockStateWrapperCreatedEvent 拿现成实例
+   兜底 a: 反射 core 内部工厂 (钉死 3.3.3); 兜底 b: 拦截 DhApiBlockStateWrapperCreatedEvent 拿现成实例
 2. DH beta API 漂移: compileOnly + 运行时检测双保险
 3. 表面方块规则: LOD 列表面 (草/石/水/雪) 从 climate + height 推导, 规则引擎活
 4. 联机拓扑: DH 远距生成在客户端, 模型 2GB 在服务端 -> 客户端带模型或走网络协议 (大工程, 二期)
@@ -59,7 +59,7 @@
 1. 名字撞名检查 (curseforge/modrinth, 我无网络把握)
 2. 联机范围 (报告建议二期)
 3. 发布渠道 + push 时机 (本地 commit 已留, push 全部等你)
-4. DH 版本跟随策略 (2.3.2-b 之后有 stable 时升不升)
+4. DH 版本跟随策略 (3.3.3 之后有 stable 时升不升)
 
 ## S1 侦查案卷 (2026-11-14, javap/read 全实证)
 
@@ -84,7 +84,7 @@
 - init 后到会走 setSeed 分支自愈, 防护只覆盖窗口期
 
 ### Wrapper 工厂 (定案)
-- WrapperFactory_forge.INSTANCE (public static final, common.wrappers 包 = core 内部非 api 面, DH 升版漂移风险, compileOnly 钉 2.3.2-b)
+- WrapperFactory_forge.INSTANCE (public static final, common.wrappers 包 = core 内部非 api 面, DH 升版漂移风险, compileOnly 钉 3.3.3)
 - getBiomeWrapper(String, level) / getDefaultBlockStateWrapper(String, level) / getAirBlockStateWrapper() / getWaterBlockStateWrapper(level)
 - 字符串入口 + biomeIndexes short -> catalog key -> wrapper, biome 规则引擎 (原风险 #3) 作废
 
@@ -185,4 +185,4 @@
 - [x] TdDhWorldGenerator (generateLod = runAsync 壳 + generateInternal 真逻辑)
 - [x] DhCompat 真注册 (LevelLoad 事件 + 守卫过滤 + worldGenOverrides)
 - [x] TdConfig (JSON 三键)
-- [ ] 裸 runClient 烟雾 → 停在 DH+TD 联调线前等 max (build 已绿: 96e3e4d 桥接层 + d82470c 编码修复 + 3e5f985 deprecation 修复, compileJava --rerun-tasks 零警告, jar 严格 UTF-8 验过; 烟雾方式 A/C/D 待 max 拍板)
+- [x] 烟雾 → max 已实测 TEST 联跑 (2026-11-15): 开机雷根修 6ba4e32 (versionRange [2.3,9.4)); 实测暴露远距零生成 (saves 零落盘), 根因追查中; build 绿链: fc5aa05 + 1770612 + 6ba4e32 (3e5f985 假绿案见 memory 080)
