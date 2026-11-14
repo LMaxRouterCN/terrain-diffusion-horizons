@@ -1,0 +1,9 @@
+.agent_task_logs/
+.agent_temp_files/
+.agent_trash/
+.gradle/
+build/
+run/
+.idea/
+*.iml
+.vscode/
