@@ -49,7 +49,7 @@
 
 ## 阶段计划
 - [x] S0 仓库 init + 本文档 (2026-11-14 夜, max 睡前授权: 取名 + 自主推进)
-- [ ] S1 侦查: DH jar javap 复验 + TD WorldPipeline 签名实证 (Accessor mixin 可行性判决)
+- [x] S1 侦查: 完成, 案卷见下 (mixin 整个不需要, 全公开面直调; wrapper 用 WrapperFactory_forge.INSTANCE)
 - [ ] S2 骨架: Forge mod 工程 + DhCompat 空注册 + 烟雾启动 (网络配方: TD_MIRROR=1 + td-mirror.init.gradle)
 - [ ] S3 wrapper 攻坚 (预留 1-2 天, 白天 max 盯场时打)
 - [ ] S4 列填充 + 表面规则 (草/石/水/雪)
@@ -60,3 +60,52 @@
 2. 联机范围 (报告建议二期)
 3. 发布渠道 + push 时机 (本地 commit 已留, push 全部等你)
 4. DH 版本跟随策略 (2.3.2-b 之后有 stable 时升不升)
+
+## S1 侦查案卷 (2026-11-14, javap/read 全实证)
+
+### 数据获取链 (定案)
+- 主入口: LocalTerrainProvider.getRiverTerrainData(i1, j1, i2, j2, withBiomes) - public static
+  - 返回 RiverTerrainData: float[] elevation + float[] climate(5ch) + short[] biomeIndexes + byte[] waterMask + float[] waterSurface + width/height
+  - 内部走 HydrologyProvider 共享缓存 (与 chunk 生成同源, 缓存命中白捡)
+- 备选: fetchHeightmap (实例方法, 独立 region cache) / WorldPipeline.get (原始输出, 无水文学, 弃)
+
+### 坐标语义 (定案)
+- i/j 是块坐标, i=Z, j=X (fetchHeightmap javadoc 实证); scale 内部消化, 调用方只管块
+- DH 侧坐标 x 在前 -> 翻译层换轴: TD.i=Z 对 DH.z, TD.j=X 对 DH.x
+
+### 线程模型 (定案)
+- 静态门面全走 INFERENCE_EXECUTOR 单线程 + SEED_LOCK 读锁, .get() 无超时
+- DH executor 线程阻塞等 TD 推理线程: 正确形态, GPU 推理单流串行, seed 一致性免操心
+- seed 变更走写锁排他 (changeSeedFromExplorer), 运行中换种子也能跟上
+
+### seed-0 兜底陷阱 (风险, 已定防护)
+- getInstance(): INSTANCE null 时不抛, awaitLoad 后以 seed=0 兜底 new -> 静默错误数据
+- 防护: generateLod 入口对比 LocalTerrainProvider.getSeed() vs 注册时捕获的 world seed, 不符跳过本列
+- init 后到会走 setSeed 分支自愈, 防护只覆盖窗口期
+
+### Wrapper 工厂 (定案)
+- WrapperFactory_forge.INSTANCE (public static final, common.wrappers 包 = core 内部非 api 面, DH 升版漂移风险, compileOnly 钉 2.3.2-b)
+- getBiomeWrapper(String, level) / getDefaultBlockStateWrapper(String, level) / getAirBlockStateWrapper() / getWaterBlockStateWrapper(level)
+- 字符串入口 + biomeIndexes short -> catalog key -> wrapper, biome 规则引擎 (原风险 #3) 作废
+
+### S2 切分 (新决策)
+- S2a: mod 壳 + DH compileOnly (发行 jar 现成) + DhCompat 空注册 + 烟雾启动 -> 不依赖 TD 构建, 可独立验证
+- S2b: TdBridge + 翻译层 + 真实 generateLod -> 硬依赖 TD 构建产物 jar (compileOnly), 与 D7/D8 验收构建合并
+- 原风险清单 #1 (wrapper 获取) 正式销案, #3 (表面规则) 大幅缩水 (水=waterMask+waterSurface, 群系=biomeIndexes, 剩: 雪线/表面方块选择的薄层规则)
+
+### 剩余待验证 (写码时运行时实测)
+- [ ] setApiDataPointColumn(int, int, List) 参数序 (javap 无参数名, 疑 x,z; 运行时打印验证)
+- [ ] WorldScaleManager 非 TD 世界行为
+- [ ] DH generateLod detailLevel -> 块区域换算
+- [ ] generateLod 跳过列时 DH 的行为 (保留旧数据 or 空)
+
+## S2a 案卷 (2026-11-14 夜, 文件落盘)
+- 结构: 单项目扁平 (仅 Forge 1.20.1; 无 multiversion/无 fabric/无 mixin/无 AT/无 ONNX)
+- 构建链: ModDevGradle legacyforge 2.0.77 + parchment 2023.09.03 + Java 17, 与 TD fork 刻意同链同版本
+  -> 插件/依赖/parchment 全命中 F:\MOVED\.gradle 缓存, TD_MIRROR 四件套直接复用, 零新增网络需求
+- compileOnly 双 jar: dh_jar + td_jar 路径走 gradle.properties (正斜杠), S2a 挂上不消费, S2b 起吃
+- reobfJar: jar finalizedBy, 1.20.1 Forge 生产 SRG 命名 (TD fork 同姿势)
+- DH 挂钩姿势: mods.toml 软依赖 + 代码侧 ModList.isLoaded 双宿主检测 (缺席静默闲置)
+- 烟雾启动 = 裸 runClient (不带 DH/TD): 验证壳 + mods.toml 解析 + 无宿主退化路径
+- 待验证 (S2b 运行时): DH modid 是否 "distanthorizons"; TD fml id "terrain_diffusion_mc" 已从源实证
+- 遗留: LICENSE 已定稿 (MPL-2.0 全文, mozilla.org 正源); 首构建时间由 max 醒后拍板

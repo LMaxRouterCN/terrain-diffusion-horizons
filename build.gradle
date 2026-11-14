@@ -1,0 +1,104 @@
+// =============================================================================
+// Terrain Diffusion Horizons - S2a mod 壳
+// 配方移植自 LMaxs Terrain Diffusion fork versions/1.20.1 (刻意同链同版本:
+// 插件/依赖/parchment 缓存全部命中 F:\MOVED\.gradle, TD_MIRROR 镜像方案直接复用)
+// 无 mixin / 无 AT / 无 ONNX: 纯桥接层, 全部走 TD 公开面直调 (S1 案卷结论)
+// =============================================================================
+
+plugins {
+    id 'net.neoforged.moddev.legacyforge' version '2.0.77'
+}
+
+legacyForge {
+    version = "${minecraft_version}-${forge_version}"
+    // Parchment 参数名映射: 与 TD fork 同版本号, 依赖缓存直接命中
+    parchment {
+        minecraftVersion = parchment_minecraft
+        mappingsVersion = parchment_version
+    }
+    runs {
+        // S2a 烟雾启动: 只配 client, 不带 DH/TD jar (验证壳 + 无 DH 优雅退化路径)
+        client { client() }
+    }
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+// 仓库: 与 TD fork multiloader-common.gradle 同构 (parchment 数据走 exclusiveContent;
+// maven.neoforged.net 被阻断, 但同链下 TD_MIRROR 头插本地仓 + 缓存可命中, 见 [长期记忆: 035/038/045])
+repositories {
+    mavenCentral()
+    exclusiveContent {
+        forRepositories(
+                maven { name = 'ParchmentMC'; url = 'https://maven.parchmentmc.org/' },
+                maven { name = 'NeoForge'; url = 'https://maven.neoforged.net/releases' }
+        )
+        filter { includeGroup('org.parchmentmc.data') }
+    }
+}
+
+// compileOnly 双 jar: DH 发行 jar (API 面) + TD fork 构建产物 (LocalTerrainProvider 等)
+// 路径全走 gradle.properties (可配置化); S2a 代码不引用, 挂上即路径有效性烟雾, S2b 起消费
+dependencies {
+    compileOnly files(dh_jar)
+    compileOnly files(td_jar)
+}
+
+def javaTarget = (findProperty('java_version') ?: '17') as Integer
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(javaTarget)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = 'UTF-8'
+    it.options.release.set(javaTarget)
+}
+
+// javadoc 编码钉版 [长期记忆: 065]: 中文 Windows 默认 GBK 读源, UTF-8 源会炸 unmappable 警告
+tasks.withType(Javadoc).configureEach {
+    it.options.encoding = 'UTF-8'
+    it.options.docEncoding = 'UTF-8'
+    it.options.charSet = 'UTF-8'
+}
+
+// mods.toml 变量展开 (与 TD fork processResources 机制同构)
+processResources {
+    def expandProps = [
+            'version'                   : version,
+            'group'                     : project.group,
+            'minecraft_version'         : minecraft_version,
+            'minecraft_version_range'   : minecraft_version_range,
+            'forge_loader_version_range': forge_loader_version_range,
+            'mod_id'                    : mod_id,
+            'mod_name'                  : mod_name,
+            'mod_author'                : mod_author,
+            'license'                   : license,
+            'description'               : description,
+    ]
+    filesMatching('META-INF/mods.toml') {
+        expand expandProps
+    }
+    inputs.properties(expandProps)
+}
+
+// 产物 reobf 到 SRG: 1.20.1 Forge 生产运行时命名 (dev 是 Mojang mapping, 发行必须 reobf, TD fork 同姿势)
+jar {
+    finalizedBy('reobfJar')
+    manifest {
+        attributes([
+                'Specification-Title'   : mod_name,
+                'Specification-Vendor'  : mod_author,
+                'Specification-Version' : version,
+                'Implementation-Title'  : mod_id,
+                'Implementation-Version': version,
+                'Implementation-Vendor' : mod_author,
+                'Built-On-Minecraft'    : minecraft_version
+        ])
+    }
+}

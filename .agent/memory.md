@@ -314,3 +314,14 @@ tag: td情报, terrain-diffusion-mc, 矿石锚点, 坑
 2) TD WorldPipeline (com.github.xandergos.terraindiffusionmc.pipeline) 是 overlay 生成文件, src 无源码, 仅存在于 versions/1.20.1/{common,forge}/build/generated/terrain-diffusion-overlay/ 下; 872 行, public final class, 构造器 public x2 (seed,models / seed), get(i1,j1,i2,j2,withClimate[,blocksPerNativePixel])/setSeed/getSeed/getCoarseSlice/getLatentElevation/getLatentClimate/clearCaches/close 全 public -> DH 桥接可能不需要 Accessor mixin, 直接调用+截现成实例即可; 三方发行同模板生成 = 签名天然一致.
 tag: DH加速, DistantHorizons, td情报, terrain-diffusion-mc
 <!-- END:071 -->
+<!-- ID:072 -->
+2026-11-14 夜 TDH (Terrain Diffusion Horizons, 桥接mod: TD管线→DH远距生成) S2a 壳落盘. 关键架构决策:
+1) 目录 D:\Documents\mcmod\Terrain Diffusion Horizons (空格跟随max风格), modid=terraindiffusionhorizons, 包 com.lmaxrouter.terraindiffusionhorizons, 主类@Mod无参构造器+ModList.isLoaded双宿主检测(缺席静默闲置=设计内行为).
+2) 构建链刻意与 TD fork 同链同版本: moddev.legacyforge 2.0.77 + parchment 2023.09.03 + Java 17 + wrapper 8.14.3(腾讯镜像) -> 插件/依赖/parchment 全命中 F:\MOVED\.gradle 缓存, TD_MIRROR 四件套直接复用零新增网络需求; 插件版本定义在 TD fork versions/1.20.1/build.gradle 的 plugins 块(子项目声明不带版本).
+3) compileOnly 双 jar 走 gradle.properties 正斜杠路径(dh_jar=TEST实例mods的DH 2.3.2-b, td_jar=fork build/libs 230.1.2.0), S2a 不消费 S2b 吃.
+4) reobfJar finalizedBy(1.20.1 Forge 生产SRG必须), 无mixin/无AT/无ONNX(纯桥接).
+5) TD fml_mod_id=terrain_diffusion_mc(vdir gradle.properties实证), DH modid=distanthorizons(待S2b运行时实证).
+6) 遗留: LICENSE 80B占位需补MPL-2.0全文.
+旧标签 terrain-diffusion-mc 指 TD fork 仓库; TDH 项目标签从此条起.
+tag: TDH项目, terrain-diffusion-horizons, 构建配方, S2a
+<!-- END:072 -->

@@ -1,0 +1,45 @@
+# Terrain Diffusion Horizons mod 描述文件 (Forge 1.20.1)
+# ${...} 变量由 build.gradle processResources 展开
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "MPL-2.0"
+
+[[mods]]
+modId = "terraindiffusionhorizons"
+version = "${version}"
+displayName = "${mod_name}"
+authors = "${mod_author}"
+description = '''${description}'''
+
+# Forge 本体: 硬依赖
+[[dependencies.terraindiffusionhorizons]]
+    modId = "forge"
+    mandatory = true
+    versionRange = "${forge_loader_version_range}"
+    ordering = "NONE"
+    side = "BOTH"
+
+# Minecraft 1.20.1 系
+[[dependencies.terraindiffusionhorizons]]
+    modId = "minecraft"
+    mandatory = true
+    versionRange = "${minecraft_version_range}"
+    ordering = "NONE"
+    side = "BOTH"
+
+# Distant Horizons: 软依赖 (缺席时壳静默闲置; 在场由代码侧 isLoaded 检测后挂钩)
+# modid "distanthorizons" [待验证-S2b 运行时实证]
+[[dependencies.terraindiffusionhorizons]]
+    modId = "distanthorizons"
+    mandatory = false
+    versionRange = "[2.3, 2.4)"
+    ordering = "AFTER"
+    side = "BOTH"
+
+# Terrain Diffusion: 软依赖同理 (fml id 见 TD fork vdir gradle.properties, 实证 terrain_diffusion_mc)
+[[dependencies.terraindiffusionhorizons]]
+    modId = "terrain_diffusion_mc"
+    mandatory = false
+    versionRange = "[0,)"
+    ordering = "AFTER"
+    side = "BOTH"
