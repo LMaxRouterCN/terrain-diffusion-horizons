@@ -28,11 +28,11 @@ description = '''${description}'''
     side = "BOTH"
 
 # Distant Horizons: 软依赖 (缺席时壳静默闲置; 在场由代码侧 isLoaded 检测后挂钩)
-# modid "distanthorizons" [待验证-S2b 运行时实证]
+# modid "distanthorizons" [已实证 2026-11-15: DH 3.3.3 加载 + TDH 生成器注册成功]
 [[dependencies.terraindiffusionhorizons]]
     modId = "distanthorizons"
     mandatory = false
-    versionRange = "[2.3, 2.4)"
+    versionRange = "[2.3, 9.4)" # 上界放宽: 2.4 挡 DH 3.3.3 开机 (采纳自 max 实测手改)
     ordering = "AFTER"
     side = "BOTH"
 
