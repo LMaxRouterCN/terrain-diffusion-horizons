@@ -185,4 +185,4 @@
 - [x] TdDhWorldGenerator (generateLod = runAsync 壳 + generateInternal 真逻辑)
 - [x] DhCompat 真注册 (LevelLoad 事件 + 守卫过滤 + worldGenOverrides)
 - [x] TdConfig (JSON 三键)
-- [ ] 裸 runClient 烟雾 → 停在 DH+TD 联调线前等 max (build 已绿: 96e3e4d 桥接层 + d82470c filteringCharset 编码修复, 产物 jar 严格 UTF-8 双验通过; 烟雾方式 A/C/D 待 max 拍板)
+- [ ] 裸 runClient 烟雾 → 停在 DH+TD 联调线前等 max (build 已绿: 96e3e4d 桥接层 + d82470c 编码修复 + 3e5f985 deprecation 修复, compileJava --rerun-tasks 零警告, jar 严格 UTF-8 验过; 烟雾方式 A/C/D 待 max 拍板)
