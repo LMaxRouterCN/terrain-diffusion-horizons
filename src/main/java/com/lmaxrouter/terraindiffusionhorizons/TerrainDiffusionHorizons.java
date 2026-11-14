@@ -1,5 +1,6 @@
 package com.lmaxrouter.terraindiffusionhorizons;
 
+import com.lmaxrouter.terraindiffusionhorizons.dh.DhCompat;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import org.slf4j.Logger;

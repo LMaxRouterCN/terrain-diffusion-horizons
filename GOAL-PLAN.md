@@ -170,8 +170,12 @@
   isFrozenRiver(); biome_catalog.json key = 标准 ID (minecraft:plains) — S4 消费
 - 阻塞语义: submitToInferenceThread().get() 无超时, 在 DH 池线程阻塞等 GPU 推理, 正确形态
 
-### S2b 实现范围 (占位版, 真群系/水/表面规则 = S4)
-- 表面占位 stone + plains, JSON 三键可配 (surfaceBlock / fillerBiome / enabled)
+### S2b 实现范围 (修正: 水提前进 S2b; 真群系/表面规则 = S4)
+- 水提前理由: withBiomes=false 时 waterMask/waterSurface 随查询白送 (buildRiverTerrainData 源码实证),
+  一个 if 分支换烟雾测试直接可见河流; 案卷旧文"水=S4"作废
+- getReturnType() 必须 override 返回 API_DATA_SOURCES (default 是 VANILLA_CHUNKS, 不改则 DH 分流到
+  generateChunks, generateLod 永不被调 — 本轮 javap 实证 default 方法体)
+- mode 过滤 (S2b 姿态): SURFACE/INTERNAL_SERVER 干活, FEATURES/PRE_EXISTING_ONLY 跳过 (联调日志定案)
 - 首调日志 dump generateLod 全参数 (posX/posZ 单位 + 实际请求档位定案用)
 - seed 不符 → 跳过本数据源 (不调 consumer), 日志限流
 

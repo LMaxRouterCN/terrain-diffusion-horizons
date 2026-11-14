@@ -6,4 +6,4 @@ build/
 run/
 .idea/
 *.iml
-.vscode/
+.vscode/libs/
