@@ -185,4 +185,4 @@
 - [x] TdDhWorldGenerator (generateLod = runAsync 壳 + generateInternal 真逻辑)
 - [x] DhCompat 真注册 (LevelLoad 事件 + 守卫过滤 + worldGenOverrides)
 - [x] TdConfig (JSON 三键)
-- [x] 烟雾 → max 已实测 TEST 联跑 (2026-11-15): 开机雷根修 6ba4e32 (versionRange [2.3,9.4)); 实测暴露远距零生成 → 已定案 2026-11-15 05:12 首调日志: mode=FEATURES 被守卫 2 静默拒 (DH 队列 mode 直传 config chunkGeneratorMode, 默认 FEATURES, 合法值无 SURFACE → 守卫 SURFACE 分支为死分支, 黑名单反拦默认流量); 修法: 守卫 2 反转白名单只拒 PRE_EXISTING_ONLY, 待 max 批; build 绿链: fc5aa05 + 1770612 + 6ba4e32 (3e5f985 假绿案见 memory 080)
+- [x] 烟雾 → max 已实测 TEST 联跑 (2026-11-15): 开机雷根修 6ba4e32 (versionRange [2.3,9.4)); 实测暴露远距零生成 → 已定案 2026-11-15 05:12 首调日志: mode=FEATURES 被守卫 2 静默拒 (DH 队列 mode 直传 config chunkGeneratorMode, 默认 FEATURES, 合法值无 SURFACE → 守卫 SURFACE 分支为死分支, 黑名单反拦默认流量); 修法: 守卫 2 反转白名单只拒 PRE_EXISTING_ONLY; 已修+部署 TEST, 待重测; build 绿链: fc5aa05 + 1770612 + 6ba4e32 (3e5f985 假绿案见 memory 080)

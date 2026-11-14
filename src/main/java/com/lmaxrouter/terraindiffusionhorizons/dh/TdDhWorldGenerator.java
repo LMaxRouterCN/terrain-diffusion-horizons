@@ -120,8 +120,12 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
             return;
         }
         // 守卫 2: 模式过滤 (S2b 姿态: 宁可多吃不可漏吃, 写同一数据源幂等)
-        if (mode != EDhApiDistantGeneratorMode.SURFACE && mode != EDhApiDistantGeneratorMode.INTERNAL_SERVER) {
-            return; // FEATURES (无 feature 数据) / PRE_EXISTING_ONLY (存档已有数据) 静默让行
+        // [长期记忆: 085] 只拒 PRE_EXISTING_ONLY (语义即"不生成新的"); FEATURES 必须放行:
+        // DH 队列传给 generateLod 的 mode 直传 config chunkGeneratorMode (默认 FEATURES),
+        // 合法值无 SURFACE (它只存在于 generatorPlan, 永不到达 API 生成器),
+        // 拒 FEATURES = 拒默认配置 = 远距零生成 (2026-11-15 TEST 实证)
+        if (mode == EDhApiDistantGeneratorMode.PRE_EXISTING_ONLY) {
+            return;
         }
         // 守卫 3: seed 一致性 (TD 管线换种子窗口期, 静默错数据比缺数据更糟)
         if (LocalTerrainProvider.getSeed() != expectedSeed) {
