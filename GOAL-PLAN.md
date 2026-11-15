@@ -199,7 +199,7 @@
 
 **症状映射**: 约 16 个数据源全查原点附近同一 4096x4096 区域 (pos 未乘 64, 值仅 20 上下), 写入循环只取返回数组左上 64x64 角落 -> 每块 LOD 贴同一片地 = 重复+错位; 角落疑含模型边缘垃圾高度 = 冲天石柱 (推测); 错位数据下采样 = 精细度坏。放大消失/闪现闪消未归因, 修后看残留。
 
-**修法 (已定案, 未应用, 等 max 拍板)**: TdLodTranslator.dataSourceBlockBounds:
+**修法 (已应用 d759a33, 已构建部署, 等 max 重测)**: TdLodTranslator.dataSourceBlockBounds:
 
     int size = columnWidthBlocks(apiDetailLevel); // 数据源边长(块), dl0 = 64
     int bx = posX * size;
