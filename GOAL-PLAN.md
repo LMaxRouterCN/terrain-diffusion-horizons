@@ -108,7 +108,7 @@
 - DH 挂钩姿势: mods.toml 软依赖 + 代码侧 ModList.isLoaded 双宿主检测 (缺席静默闲置)
 - 烟雾启动 = 裸 runClient (不带 DH/TD): 验证壳 + mods.toml 解析 + 无宿主退化路径
 - 待验证 (S2b 运行时): DH modid 是否 "distanthorizons"; TD fml id "terrain_diffusion_mc" 已从源实证
-- 遗留: 主线等 max 重测 (d759a33 已构建部署); 副线: .gitignore (libs/, build-last.log) 与 GitHub 建仓待 max 决策
+- 遗留: 主线等 max 重测 (案 II yBottom=4032 修复已提交+部署, 哈希见 git log, 验证清单见下方案 II); 副线: .gitignore (libs/, build-last.log) / .agent 三文件处置 / GitHub 建仓三连问, 均待 max 决策
 
 ## S2b 前置 API 签名案卷 (2026-11-14 夜, javap 实证)
 - generateLod 全签名: generateLod(int x, int z, int minX, int minZ, byte detailLevel,
@@ -197,9 +197,9 @@
    证据: (a) WorldGenerationQueue 调用点字节码: DhSectionPos.getX/getZ, 核心dl = apiDl+6, 段坐标 1 单位 = 2^核心dl 块; (b) DhWorldGenerator.generateLod 开头 powerOfTwo(apiDl+6) = 数据源边长; (c) 双会话首调 chunkMin/pos 比值恒 4 (chunk 16 块 x 4 = 64)。
 2. span 错: FullDataSourceV2 恒 64x64 数据列, dl0 列宽 1 块, 总边长 64 块。旧代码 span = columnWidthBlocks x widthInColumns = 4096, 大 64 倍。
 
-**症状映射**: 约 16 个数据源全查原点附近同一 4096x4096 区域 (pos 未乘 64, 值仅 20 上下), 写入循环只取返回数组左上 64x64 角落 -> 每块 LOD 贴同一片地 = 重复+错位; 角落疑含模型边缘垃圾高度 = 冲天石柱 (推测); 错位数据下采样 = 精细度坏。放大消失/闪现闪消未归因, 修后看残留。
+**症状映射**: 约 16 个数据源全查原点附近同一 4096x4096 区域 (pos 未乘 64, 值仅 20 上下), 写入循环只取返回数组左上 64x64 角落 -> 每块 LOD 贴同一片地 = 重复+错位; 错位数据下采样 = 精细度坏。冲天石柱当时推测"模型边缘垃圾高度", 已改判 (见下方案 II: 实为 yBottom 4032 回绕, 元案独立 bug)。放大消失/闪现闪消未归因, 案 II 修后复查。
 
-**修法 (已应用 d759a33, 已构建部署, 等 max 重测)**: TdLodTranslator.dataSourceBlockBounds:
+**修法 (已应用 d759a33, 已构建部署, 重测验证生效 2026-11-15 20:11 会话: 首调乘 64 精确落 chunkMin, 每 tile 自采区域, 生成提速)**: TdLodTranslator.dataSourceBlockBounds:
 
     int size = columnWidthBlocks(apiDetailLevel); // 数据源边长(块), dl0 = 64
     int bx = posX * size;
@@ -211,3 +211,15 @@ widthInColumns 参数保留 (dl>0 时列宽 2^dl, 未来扩展); 建议同时在
 **明早验证清单**: (1) 修后重测: 重复/错位应消失 (2) TD 64x64 小查询的 data.width 契约 (应 = 64) (3) i/j 轴序 (Z,X) 视觉实证 (4) 残留症状单独再评 (5) 单查询采样 16.7M -> 4K, DH 生成速率应显著回升。
 
 **环境事实存档**: 06:40 会话 mode=FEATURES (守卫 2 放行路径实证), ds=FullDataSourceV2, 全程零 warn; 世界 105 sqlite 5.5MB; latest.log 06:54:59; java 已退出。
+
+---
+
+### 数据正确性案 II: yBottom=4032 冲天石柱 (2026-11-15 夜, memory 092)
+
+**重测 (20:11 会话, max 开新世界 seed=3306015219772967962, 世界 105 基线保全)**: 坐标修复现场验证生效 — 首调 pos=(21,-26)x64 精确落 chunkMin=(84,-104), 每 tile 自采区域, 新世界 DH 库 28MB (105 全生涯 5.5MB), max 体感"更快"。但症状主体仍在: 冲天石柱遍地且更快。
+
+**根因 (实证)**: 生成器实体段 bottom 喂 levelWrapper.getMinHeight() = -64 (主世界); DH 存储层 y 为 12 位无符号, -64 回绕 = 4032 (-64 & 0xFFF; 孤儿值 4033 = -63 & 0xFFF 同律); bottom(4032) > top(64~82 原样入库) 几何倒挂 → 主渲染路径画 y70~4032 冲天石柱 (柱顶随地形起伏, 柱底钉 4032), 邻接数据加载路径抛 "Negative y size for the renderDataPoint" (14.6 万条/13min ≈ 10MB/min 刷屏, Y-:4032 占 99.996%)。旧会话同错 10.4 万条 = 元案独立 bug, 与坐标修复无关; 坐标修复使坏 bottom 从集中一片变遍地 = "更快"闭环。官方模板 (0,h)+(h,顶) 的 0 是承重契约 (存储 y 非负), 偏离踩雷。
+
+**修法 (本轮已应用)**: TdDhWorldGenerator.generateInternal: 新增 dataBottom = max(minY, 0) 作实体段底; solidTop/waterTop 钳位下界 minY → dataBottom; 顶保持绝对坐标 (实证正确)。钳位保证 bottom ≤ top 恒成立。y<0 区间不写段 (地下不可见, 与官方模板同构)。
+
+**案 II 验证清单 (重测看点)**: (1) Negative y size 刷屏应归零 (2) 石柱应消失 (3) 地形高度正确 — 若整体下沉 64 = DH 语义实为相对 y → 顶转相对 (分支预案, memory 092) (4) 重复/错位/tile 复制粘贴感复查 (石柱 bug 曾主导视觉, 修后才能判) (5) 放大消失/闪现闪消若残留 = 独立案 (6) DH 生成速率维持回升。

@@ -157,8 +157,11 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         }
 
         // ==== 双循环写列 ====
-        // y 段语义按半开区间 [bottom, top) 写 (官方模板 (0,h)+(h,顶) 的解读, 运行时偏移一格属已知待验证项)
+        // y 段按半开区间 [bottom, top) 写, 段底一律非负 — 官方模板 (0,h)+(h,顶) 的 0 是承重契约, 非占位.
+        // [长期记忆: 092] DH 存储 y 为 12 位无符号: 负 bottom (minY=-64) 回绕成 4032 → bottom>top 几何倒挂 → 冲天石柱 + Negative y size 刷屏.
+        // 顶保持绝对坐标 (实证原样入库渲染正确); 分支预案: 修后若地形整体下沉 64, 则 DH 语义为相对 y, 顶需转相对 (见 092).
         int minY = levelWrapper.getMinHeight();
+        int dataBottom = Math.max(minY, 0); // 段底下限非负化: 取 0 而非 minY; y<0 区间不写段 (地下不可见, 与官方模板同构)
         int maxY = levelWrapper.getMaxHeight();
         int width = data.width;               // TD 数组宽 = X 向块数
         float[] elev = data.elevation;        // 海拔米 (行主序 idx = z*width + x)
@@ -168,17 +171,18 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         for (int x = 0; x < cols; x++) {
             for (int z = 0; z < cols; z++) {
                 int idx = TdLodTranslator.sampleIndex(x, z, width);
-                int solidTop = clampY(HeightConverter.convertToMinecraftHeight((short) elev[idx]) + 1, minY, maxY);
+                int solidTop = clampY(HeightConverter.convertToMinecraftHeight((short) elev[idx]) + 1, dataBottom, maxY);
                 int coverTop = solidTop;
                 // 水体列: 水面高于地形才成池 (waterMask 优先, 液面 <= 地形视为无水)
                 if (waterMask != null && waterMask[idx] != 0 && waterSurf != null) {
-                    int waterTop = clampY(HeightConverter.convertToMinecraftHeight((short) waterSurf[idx]) + 1, minY, maxY);
+                    int waterTop = clampY(HeightConverter.convertToMinecraftHeight((short) waterSurf[idx]) + 1, dataBottom, maxY);
                     if (waterTop > solidTop) {
                         coverTop = waterTop;
                     }
                 }
                 List<DhApiTerrainDataPoint> points = new ArrayList<>(3);
-                points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, minY, solidTop, surfaceBlock, fillerBiome));
+                // [长期记忆: 092] 段底喂 dataBottom (非负): 喂 minY=-64 被 DH 12 位无符号存储回绕成 4032 → 冲天石柱元凶
+                points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop, surfaceBlock, fillerBiome));
                 if (coverTop > solidTop) {
                     points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, coverTop, waterBlock, fillerBiome));
                 }
