@@ -225,3 +225,5 @@ widthInColumns 参数保留 (dl>0 时列宽 2^dl, 未来扩展); 建议同时在
 **部署与验尸证据 (091/090 证据原则)**: 四件套配方构建 (TD_MIRROR=1 + GRADLE_USER_HOME=F:\MOVED\.gradle + JAVA_HOME=zulu-17 + TEMP/TMP=D:\temp) 20s BUILD SUCCESSFUL, 13KB jar 部署 TEST mods (mtime 2026-11-15 22:14:22); javap 直验部署物 (mods 里游戏实际加载那份, 非 build/libs): getMinHeight:()I → iconst_0 → invokestatic Math.max:(II)I → istore dataBottom, 反汇编存 D:\temp\tdh-javap.txt, 排除假绿 (080 前科)。构建链绕路两轮根因 = exec 环境缺四件套 + 通道假读数误导 (DNS 污染本身是真坑但非本案死因), 教训入 memory 093。
 
 **案 II 验证清单 (重测看点)**: (1) Negative y size 刷屏应归零 (2) 石柱应消失 (3) 地形高度正确 — 若整体下沉 64 = DH 语义实为相对 y → 顶转相对 (分支预案, memory 092) (4) 重复/错位/tile 复制粘贴感复查 (石柱 bug 曾主导视觉, 修后才能判) (5) 放大消失/闪现闪消若残留 = 独立案 (6) DH 生成速率维持回升。
+
+**案 II 重测终局 (2026-11-15 深夜, max 实测通过, 案销)**: 视觉问题全清 — Negative y size 刷屏归零, 石柱消失, 复制粘贴感/错位无残留; 生成速率 500 chunks/sec, 87% 时间满速, ETA 30min (原版 RD5 + DH RD512 全图完成)。看点 (3) 分支预案命中: LOD 整体矮 ~64 → DH 存储层 y 语义 = 距世界底偏移 (与 bottom=0 契约自洽), 待小修: 顶转相对 (top - minY)。新独立案: 地表方块全石头 (裸 DH 无此问题; 疑 TD 管线只输出高度图、表面方块类型未喂, 根源待查证后定论, 勿提前下结论)。
