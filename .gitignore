@@ -1,9 +1,19 @@
-.agent_task_logs/
-.agent_temp_files/
-.agent_trash/
+# Gradle 构建产物 / Gradle build outputs
 .gradle/
 build/
+
+# 运行目录 / game run directory
 run/
+
+# IDE
 .idea/
 *.iml
-.vscode/libs/
+.vscode/
+.settings/
+.classpath
+.project
+bin/
+
+# 本地依赖与构建日志 / local dependency jars and build logs
+libs/
+build-last.log

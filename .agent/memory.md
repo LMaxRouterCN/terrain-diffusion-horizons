@@ -337,3 +337,88 @@ tag: 坑, PowerShell, 指令格式, exec指令
 2026-11-15 输出截断第二案(与073同族不同因): ~150行代码+长前导的消息在cmd代码块中途被截断(B段第9类处), exec未闭合→整条未执行, [agent]双检唤醒才发现(用户在场也救不了, 纯输出长度限制)。纪律v2: ①exec指令块放消息最前 ②单条消息代码≤100行, 多段侦查拆多轮发 ③memory/remember等短指令放消息尾部(截断时先牺牲它们, 回执到手可补发)。
 tag: PokerAgent, 坑, 指令格式, 自动模式, 唤醒链
 <!-- END:075 -->
+<!-- ID:076 -->
+2026-11-14 深夜 TDH S2b 全量落地: BUILD SUCCESSFUL, commit 96e3e4d(桥接层), 产物 terrain-diffusion-horizons-0.1.0.jar 12.8KB(reobf SRG)。代码五文件: 主类33+TdConfig77+TdLodTranslator45+TdDhWorldGenerator227+DhCompat64。三构建坑(本次新钉): (1) gradle.properties 中文路径(地平线dh)在解析层断裂, files()对缺失路径静默容错→空classpath→错误分布"只死DH包"即此症; 修复=DH jar快照libs/ASCII名+重定向+.gitignore libs/。(2) mods.toml 注释里字面${...}被 processResources 的 Groovy SimpleTemplateEngine 当表达式炸; 模板文件里注释也别写裸${。(3) TD_MIRROR四件套(TD_MIRROR=1+GRADLE_USER_HOME=F:\MOVED\.gradle+JAVA_HOME=E:\Java\Zulu\zulu-17+TEMP/TMP=D:\temp)对TDH同链必需。TD API实证(javap): LocalTerrainProvider全静态门面(getSeed/getRiverTerrainData(int,int,int,int,boolean)皆static, RiverTerrainData=其内部类, INSTANCE单例仅内部实现)。S2a代码从未编译过(artifact阶段就死), 主类缺DhCompat import的S2a雷S2b才爆。compileJava全绿仅1处deprecation警告(TdDhWorldGenerator,联调轮查)。烟雾未跑: runClient(GUI+首跑assets~500MB)vs runServer(无GUI无assets但需eula)分岔等max。
+tag: TDH项目, terrain-diffusion-horizons, 构建坑, S2b, API坑
+<!-- END:076 -->
+<!-- ID:077 -->
+2026-11-15 Gradle 构建坑: processResources 的 expand 不设 filteringCharset 时, 模板按 JVM 默认字符集读写 (Windows + Zulu17 = GBK). UTF-8 多字节中文经 GBK 配对解码, 尾字节配错位处撞 malformed, 被替换为不可逆 0x3F '?', 产物成非法 UTF-8. TDH S2b 实证: jar 内 mods.toml 中文注释阵亡 (严格 UTF-8 读在 index 393 抛 Unable to translate [E8][B5]), 同行部分词组因字节恰好配成合法 GBK 对而幸存 → "多数中文没事"是幸存者偏差假象. 修复 = processResources 块内 filteringCharset = 'UTF-8' (Gradle 5.1+ CopySpec 属性). 判定法: 源文件严格 UTF-8 OK + 产物 BAD = 管线腰斩; javac 侧 options.encoding 与此独立 (TDH 已设 UTF-8, class 内中文字面量干净). mods.toml 模板注释里也别写裸 ${...}, Groovy SimpleTemplateEngine 会当表达式炸 (同轮另一坑).
+tag: 构建坑, gradle, 编码, processResources, expand, GBK, TDH项目, terrain-diffusion-horizons
+<!-- END:077 -->
+<!-- ID:078 -->
+2026-11-15 勘误: TDH 仓库 LICENSE 自 S2a commit 737e510 起即为 MPL-2.0 全文 16726B (cat-file HEAD 实证), "80B 占位待补"为过时信息, 勿再发起补 LICENSE 任务. 同案销案: jar 内 mods.toml 中文损坏非源文件 glitch (源三证干净: 严格扫描/hex/git diff 零差异), 是 expand GBK 腰斩, 见 filteringCharset 那条记忆.
+tag: TDH项目, terrain-diffusion-horizons, 勘误
+<!-- END:078 -->
+<!-- ID:079 -->
+2026-11-15 TDH deprecation 警告销案: DH API 2.3.2-b 的 IDhApiFullDataSource.setApiDataPointColumn(int,int,List) 3 参 default 已弃用, 4 参版 (int,int,EDhApiWorldGenerationStep,List) 是替代. javap -c 实证弃用版字节码转发 4 参时 step 硬编码 SURFACE → 显式传 SURFACE 同值替换, 行为无损, 警告归零. 判定弃用点的手法链: ①compileJava --rerun-tasks 抓 javac 警告确认存在 ②javap -v 逐 import 类扫 'Deprecated: true' (判定成败只看退出码, 文本匹配 Exception 会撞 throws/异常表造假阳性) ③javap -c 看弃用方法转发目标定同值. 注意: javap 中文环境输出 mojibake, 加 -J-Duser.language=en; IDhApiLevelWrapper 的弃用在某 default 方法上, 只传引用不调用则不触发警告.
+tag: TDH项目, DistantHorizons, deprecation, bug根因, javap
+<!-- END:079 -->
+<!-- ID:080 -->
+2026-11-15 勘误之勘误(TDH零生成案): ①TEST实例与项目libs的DH jar同hash(A537A711...), 内容实为3.3.3(mods.toml+fabric.mod.json双证), 文件名"2.3.2-b"是误名→不存在编译/运行错配, "零生成"与版本无关(此前"错放2.3.2"推断作废; 079的javap结论本身有效, 验的就是这个3.3.3内容jar, 仅版本标签错)。jar已正名DistantHorizons-3.3.3-1.20.1-forge-fabric.jar。②3e5f985轮build实为FAILED(TdDhWorldGenerator被整行replace弄伤, L190 clampY illegal start of expression), 误判绿的三个坑: grep 'BUILD'大小写不敏感先命中gradle daemon提示行"for this build"; 脚本无SUCCESS gate红了照常commit; jar UTF-8校验打到旧jar(编译失败jar未刷新)。铁律: 判绿必须-CaseSensitive 'BUILD SUCCESSFUL'且gate后续动作; jar校验前先验时间戳/hash确属本次产物; replace指令整行替换会吞行尾token, 行尾带多token的行禁用整行替换。③max实测零生成现场: seed三处全等8838..., LTP INSTANCE非null, DhApiResult无异常, 无ERROR→注册路径通, 疑生成路径或DhApiResult实为failure未打success字段。
+tag: 勘误, TDH项目, DistantHorizons, 构建坑, bug根因
+<!-- END:080 -->
+<!-- ID:081 -->
+2026-11-15 TDH 开机雷根因: mods.toml 软依赖 versionRange 上界过窄. Forge 语义实证: mandatory=false 只容忍依赖缺席, 依赖在场但版本越界时照样在 mod 加载期拒启 ("游戏开不开"). TDH 模板 DH 依赖原写 [2.3, 2.4), TEST 实例实际 DH 3.3.3 → 装原版 jar 直接开不了机, max 只能手改 jar 内 toml 放宽到 [2.3, 9.4) 才能测. 已根修模板 (采纳 max 实测值). 教训: 软依赖 versionRange 上界必须宽 (行为差异交给代码侧 isLoaded/运行时检测), 或干脆不设上界. 另: max 实测的 TDH jar 是 d82470c 时代产物 (3 参 setApiDataPointColumn), 3/4 参运行时行为等价 → "零生成"与签名修复无关, 根因另行追查 (DH 远距生成开关/生成路径).
+tag: mc模组, Forge, TDH项目, DistantHorizons, 坑, bug根因
+<!-- END:081 -->
+<!-- ID:082 -->
+2026-11-15 DH 3.3.3 API 事实 (javap 实证): DhApiResult<T> 字段 public final boolean success / String message / T payload, 无 getter 无 toString 重写 → 打印注册结果直接 result.success + result.message (旧日志打对象地址是零信息)。生成桥接类: common.wrappers.worldGeneration.DhRoughSurfaceGenerator (rough surface pass 本体) / DhInternalServerGenerator / DhChunkGenerator / core.generation.queues.WorldGenerationQueue; API 注册门面 com.seibel.distanthorizons.api.methods.override.DhApiWorldGeneratorOverrideRegister, 接口 ...override.worldGenerator.IDhApiWorldGeneratorOverrideRegister。
+tag: API坑, DistantHorizons, TDH项目, mc模组
+<!-- END:082 -->
+<!-- ID:083 -->
+2026-11-15 DH 3.3.3 worldgen API 结构 (javap 实证): ①IDhApiWorldGenerator 的 generateChunks/generateApiChunks/generateLod 三者皆为 default 方法, abstract 仅 preGeneratorTaskStart()/close(); getReturnType() 三值 VANILLA_CHUNKS/API_CHUNKS/API_DATA_SOURCES 决定队列走哪条路 ②EDhApiDistantGeneratorMode 四值 PRE_EXISTING_ONLY/SURFACE/FEATURES/INTERNAL_SERVER, 带 public final byte complexity ③注册门面 DhApiWorldGeneratorOverrideRegister.registerWorldGeneratorOverride = WorldGeneratorInjector.bind(wrapper, generator) + try/catch → createSuccess/createFail, 门面层无重复注册检查 ④WorldGenerationQueue 构造器直接持有 IDhApiLevelWrapper+IDhApiWorldGenerator, 调 getSmallest/LargestDataDetailLevel ⑤内部桥接: core.generation.DhWorldGenerator (默认适配), common.wrappers.worldGeneration.DhRoughSurfaceGenerator (surface pass, 其内部也调 4 参 setApiDataPointColumn SURFACE)。坑: 只覆写一个 generate* 而队列调用另一个时, default 体静默执行; 参数序不匹配会变静默重载 (javac 无 @Override 时不报错)。
+tag: API坑, DistantHorizons, TDH项目, mc模组
+<!-- END:083 -->
+<!-- ID:084 -->
+2026-11-15 grep 审计两连坑 (TDH 零生成案复盘): ①源码找日志点用 'LOGGER|\.log\(' 匹配不到 slf4j 惯用名 LOG 的 LOG.info/warn → 误判"零 log 调用"; 正确姿势: 先搜 getLogger("名字") 拿 logger 名再全文件搜该名 ②运行日志搜 mod 前缀 'TerrainDiffusionHorizons|TdDh' 匹配不到独立 logger 名 "TDH-Generator" (TdDh 正则序列 T,d,D,h ≠ T,D,H) → 调试日志第一版就存在却被两个 pattern 漏掉, 误导排查方向三轮。教训: 日志 grep 必须以 LoggerFactory.getLogger(...) 的实参字符串为准, 不能用"大概的名字"。
+tag: 坑, 技巧, 调试方法, bug根因, API坑
+<!-- END:084 -->
+<!-- ID:085 -->
+2026-11-15 TDH 零生成案根因 (定案): TdDhWorldGenerator 守卫 2 (mode 过滤) 只放行 SURFACE/INTERNAL_SERVER, 而 DH 3.3.3 队列传给 generateLod 的 mode 直接来自 config chunkGeneratorMode (默认 FEATURES, 合法值仅 PRE_EXISTING_ONLY/FEATURES/INTERNAL_SERVER — SURFACE 只存在于 generatorPlan, 永不到达 API 生成器) → 守卫把默认流量全静默 return, 每任务秒完成零回执, 表现为 DH 自报 13,709 chunks/sec 逆天速度 + LOD 零显示 + saves 零落盘。判案关键证据: 首调日志 "mode=FEATURES" (logger 名 TDH-Generator, 曾因 grep pattern 两连漏被误判零日志)。修法: 守卫 2 黑名单反转为白名单, 只拒 PRE_EXISTING_ONLY。通用教训: ①对 API 回调的守卫必须先实证回调实参的真实值域, 不能按语义直觉设计放行列表 ②"快得逆天"的吞吐数字本身就是空转签名 ③DH 的 chunkGeneratorMode 与 generatorPlan 是两个正交配置, mode 到达 API 侧时永远不是 SURFACE。
+tag: TDH项目, bug根因, DistantHorizons, mc模组, 坑
+<!-- END:085 -->
+<!-- ID:086 -->
+javap 字节码排雷配方 (2026-11-15 TDH 零生成案实证): ①javap -c 不带 -p 时 private 方法字节码整个不可见, private generateInternal 里的 getstatic 守卫直接隐身, 曾误判"管道吞输出"; 排查字节码必须 -c -p 成对出现 ②PowerShell Select-String 默认大小写不敏感, 会拿 surfaceBlock 字段干扰 SURFACE 枚举搜索, 要用 -cmatch 或 .Contains() 才大小写敏感 ③验证部署 jar 内容最硬路数: jar xf 解包后对 .class 做二进制 ASCII Contains 搜枚举常量名(大小写敏感); 枚举比较必有 getstatic 指令, 孤立字符串常量 = ldc 字面量(日志文案或 name() 字符串比较) ④增量编译佐证: build\classes 里只有改动类+依赖类时间戳更新, 其余停在旧时间, 属正常非假成功。
+tag: javap, 技巧, 坑, 字节码
+<!-- END:086 -->
+<!-- ID:087 -->
+DH LOD 落盘与版本环境实证 (2026-11-15, TEST 1.20.1-Forge_47.4.10 实例): ①DH 2.3.2-b 的 LOD 存 saves\<世界名>\data\DistantHorizons.sqlite 单文件, 不是 data\DistantHorizons\ 目录; 判世界有无 LOD 看该 sqlite 存在+mtime, 世界104实证有(01:43+05:17 两会话写入) ②版本错配: 编译期 dh_jar=libs/DistantHorizons-3.3.3(GOAL-PLAN L11 目标环境也是 3.3.3), 运行期 mods=地平线dh DistantHorizons-2.3.2-b; 枚举面 EDhApiDistantGeneratorMode 四常量(PRE_EXISTING_ONLY/SURFACE/FEATURES/INTERNAL_SERVER) 双版本 javap 实证同构, 该面兼容; 其余 API 面靠 05:12 旧 jar 跑通佐证。mods 是否升 3.3.3 对齐是 max 待决策项。
+tag: DistantHorizons, 测试环境, 坑, TDH项目
+<!-- END:087 -->
+<!-- ID:088 -->
+DH generateLod 坐标语义定案 (2026-11-15 数据正确性案根因, javap+双会话实证): (1) posX/posZ 单位 = 数据源边长(块) = 2^(apiDl+6), dl0 即 64 块, 不是块坐标; 调用链: WorldGenerationQueue 用 DhSectionPos.getX/getZ (核心dl = apiDl+6, 段坐标 1 单位 = 2^核心dl 块) (2) FullDataSourceV2 恒 64x64 数据列, dl0 列宽 1 块, 数据源总边长 64 块; DhWorldGenerator.generateLod 开头 powerOfTwo(apiDl+6) 佐证 (3) 实证法: 首调日志 chunkMin/pos 比值恒 4, chunk 16 块 x4 = 64, 双会话复现 (4) TDH 旧 translator 双重错: pos 未乘 64 (全查原点附近) + span 多乘 widthInColumns (4096 而非 64) → 16 数据源同查一区域各取左上 64x64 角落平铺 = 地形重复/网格错位/冲天石柱/精细度坏的单一根因 (5) 修法: size = columnWidthBlocks(dl); bounds = {posZ*size, posX*size, +size, +size}; widthInColumns 留作 dl>0 扩展。"放大消失/闪现闪消"未归因, 修坐标后看残留。
+tag: DistantHorizons, TDH项目, bug根因, 坐标语义, javap
+<!-- END:088 -->
+<!-- ID:089 -->
+2026-11-15 TDH构建坑补遗(勘误版, 推翻本条初版"createMinecraftArtifacts真重执行+因果闭环"断言): 漏设TD_MIRROR=1时createMinecraftArtifacts报"Execution failed for task"壳错(NFRT 1.0.13解析死: SNI阻断+四大镜像404+GitHub零release+forge maven不镜像=NFRT为neoforged maven独占); 补全四件套后24s全绿, 但验尸实况=该任务UP-TO-DATE未执行, 且两次FAILED之间无任何成功执行——"失败任务不可能UP-TO-DATE"的gradle语义断言被现实否定。转变机制未实证; 最简模型(模型非实证): moddev将NFRT作懒解析任务输入, init.d仓恢复→解析成功→更早(06:01)成功history复效→跳过执行; NFRT从不进modules-2缓存亦旁证moddev自定义解析路径。第一次失败与成功构建的唯一环境差异=TD_MIRROR, 因果方向仍立。教训: ①无实证不断言gradle内部行为, 说"不确定" ②部署物正确性的终局证据=javap字节码直验jar, 不靠构建过程链推理 ③开工先检索长期记忆(同035教训, 二犯)。
+tag: 构建坑, TDH项目, terrain-diffusion-horizons, TD_MIRROR, 网络环境
+<!-- END:089 -->
+<!-- ID:090 -->
+2026-11-15 javap假阴性坑实证(TDH案): javap -c 不带 -p 只反汇编 public/protected 成员, private 方法整段缺席输出——class常量池物理存在的字符串在视图里消失, 判"部署物可疑"即假阴性。铁证: 同一TdDhWorldGenerator.class(11170B), 无-p只吐83行/4175B, 加-p吐502行/27081B, 观测串(TD data.width...)位于private generateInternal内, -p即现。连带清白洗冤: PS管道与Start-Process raw落盘字节级一致(非管道罪); Console UTF-8中文无损。终局姿势(优先级序): ①验证部署jar含某字符串/常量 → zip条目字节级直搜(System.IO.Compression.ZipFile读entry, UTF8解码, Contains, 纯ASCII锚最稳)绕过一切显示层 ②javap验私有方法必须-p -c ③成员可见性预判: 同包package-private/private方法常驻实现类。元教训: 连续三个断言被现实否(gradle UP-TO-DATE不可能→实际UP-TO-DATE / PS管道吃行→实际一致 / javap视图=全貌→实际按可见性裁剪), 视图类工具的显示范围本身是待验证项, 断言必附证据, 字节级是唯一不动层。参考: TDH坐标案d759a33部署物验证三判据流程。
+tag: javap, 坑, 技巧, 字节码, 构建坑, TDH项目
+<!-- END:090 -->
+<!-- ID:091 -->
+2026-11-15 LICENSE乌龙案(TDH, 三环失误零后果)——A0考古后修订版: S0 f16e055 LICENSE=79B, S2a 737e510=16726B→072"80B占位"在记下当时是准确的(79≈80), 真缺口=S2a修复入库时未回写: GOAL-PLAN只更新L111("已定稿")而L12("待补")未动, 记忆条也未清, 同一事实三驻点失同步。修订后三环: ①跨驻点失同步——状态更新只写一处, 修待办必须grep全部驻点(文档各处+记忆) ②脚本无现场分支——A1已打印"16726B全文"却无"达标即return", 照走覆盖(幸同源字节, git零差异) ③校验指纹凭印象瞎写——"2.1. Contributions"不存在(实际2.1. Grants), 方向碰巧过严拦住无意义commit。元教训(089同源): 无实证内容(过时快照/印象结构)禁止入决策链, 断言必附当轮证据。MPL-2.0官方纯文本指纹: 16726B, "Mozilla Public License Version 2.0"/"2.1. Grants"/Exhibit A/Exhibit B。TDH LICENSE自S2a起完整入库, 遗留项划销。
+tag: 坑, 数据可信度, TDH项目, 技巧
+<!-- END:091 -->
+<!-- ID:092 -->
+2026-11-15 冲天石柱根因 (TDH, DH 3.3.3 y 存储语义, 实证+强假设分层): 实证: ①TDH 喂实体段 bottom=levelWrapper.getMinHeight()=-64(主世界), top=64~82; DH 存储后渲染层报 Y-:4032 占 99.996%, Y+ 原样 → 负 bottom 被翻转, 顶原样入库 ②4032=-64&0xFFF, 4033=-63&0xFFF 同律 → 强假设: DH FullData 内部 y 存储为 12 位无符号(0~4095), 负值回绕 ③官方 API 模板 y 段 (0,h)+(h,顶) 底固定 0 = 承重设计非占位, TDH 按"更正确"语义改成 minY=-64 踩雷 (TdDhWorldGenerator L160 旧注释自称"解读"即此)。机制: bottom(4032)>top(~70) 几何倒挂 → 主渲染路径画 y70~4032 冲天石柱, 邻接数据加载路径抛 "Negative y size for the renderDataPoint" = 14 万条/13min 刷屏 (~10MB/min)。旧会话同错 10.4 万条 = 元案独立 bug, 与 d759a33 坐标修复无关; 坐标修复让每 tile 采自己区域 → 坏数据遍地+更快 (max 体感吻合)。石柱旧理论"TD 模型边缘垃圾高度"退役。修法: y 一律非负 — dataBottom=max(minY,0)=0 作实体段底, solidTop/waterTop 钳位下界改 dataBottom, 加 solidTop>dataBottom 守卫; 顶保持绝对坐标 (实证正确落地)。测后验证: Negative y size 应归零+石柱消失+地形高度正确; 若地形整体下沉 64 = DH 语义实为相对 y → 顶也转相对 (分支预案)。教训: 官方模板"看似不严谨"处可能是 API 隐性契约, 偏离前先验存储层。
+tag: DH, DistantHorizons, API坑, 坑, TDH项目, bug根因
+<!-- END:092 -->
+<!-- ID:093 -->
+2026-11-15 夜 PokerAgent exec 通道传输坑定案 (三性质+规避法, 全实证; 背景=案II部署链两轮绕路, 根因全在通道而非环境):
+① 长多行脚本前段丢失/行合并: 回执 ParserError "Missing closing ')'", 报错行号与原脚本错位 (报错称 Line2 但该行原在第3行); 同结构短脚本历轮跑通.
+② $_ 被啃 + 引号变 Unicode 变体: ForEach-Object 内 ('盘: ' + $_.Name) 到达后端时 $_ 消失、引号变 ’′ → ParserError; 错误回显里的变体字符即铁证.
+③ 中文旁字符串边界漂移 → 静默假读数 (最毒, 不报错只给错数据): ('F缓存=' + (Test-Path 'F:\MOVED\.gradle')) 一行, F 与 C 两处实际存在的目录双双返回 False, 次轮全 ASCII 复核双 True; 机制未实证, 推测中文旁引号变体致 Test-Path 收到非预期字面量.
+规避法 (实证有效): exec 脚本全 ASCII / 零 $_ / 短 (≤30 行) / 管道可用但管道块内禁 $_ / 关键判断用原生指令 (find/read) 或全 ASCII 短 exec 交叉复核 / 长逻辑拆多段.
+关联: 089 (TD_MIRROR 检索三犯案, "开工先检索长期记忆").
+tag: PokerAgent, exec指令, 坑, API坑, 数据可信度, 技巧
+<!-- END:093 -->
+<!-- ID:094 -->
+2026-11-15 夜 TDH LICENSE 勘误 (git show 证据版): LICENSE 实为完整 MPL-2.0 全文 (16726B / 373 行, 尾部 Exhibit B 正常收尾), 磁盘与 HEAD 一致; 历史定论 = S0 (f16e055) 为 3 行 "MPL-2.0" 占位 (即 072 档所记 80B), S2a (737e510) 提交时已含 373 行全文 → 072 当时准确, S2a 后过时, 未来勿据 072 行动。mtime 2026-11-15 19:35:08 晚于提交但内容零差异, 同内容重写 (editor 保存/checkout 类) 嫌疑最大, 未深挖。教训: 记忆里的"待办"开工前先验现场 (089 检索病的镜像: 检索了但没核对现状)。
+tag: TDH项目, terrain-diffusion-horizons, 勘误
+<!-- END:094 -->
+<!-- ID:095 -->
+2026-11-15 深夜 案II (4032 冲天石柱) 终局: max 实测通过 — 视觉问题全清, 500 chunks/sec, 87% 满速, ETA 30min (原版 RD5 + DH RD512)。新案两条: ① LOD 整体矮 ~64, 与 4032 案 bottom=0 契约自洽推导 = DH 存储层 y 语义为距世界底偏移 (推断级, 现象吻合), 修法 = 顶转相对 top-minY, 待改待验; ② 地表方块全石头, 裸 DH 无此问题, 疑 TD 管线只输出高度图、DataPoint 表面方块未正确喂 (待查证, 未定论)。max 决策: 仓库公开发布。
+tag: TDH项目, terrain-diffusion-horizons, 坐标语义, bug根因, DH
+<!-- END:095 -->
