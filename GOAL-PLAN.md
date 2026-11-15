@@ -227,3 +227,21 @@ widthInColumns 参数保留 (dl>0 时列宽 2^dl, 未来扩展); 建议同时在
 **案 II 验证清单 (重测看点)**: (1) Negative y size 刷屏应归零 (2) 石柱应消失 (3) 地形高度正确 — 若整体下沉 64 = DH 语义实为相对 y → 顶转相对 (分支预案, memory 092) (4) 重复/错位/tile 复制粘贴感复查 (石柱 bug 曾主导视觉, 修后才能判) (5) 放大消失/闪现闪消若残留 = 独立案 (6) DH 生成速率维持回升。
 
 **案 II 重测终局 (2026-11-15 深夜, max 实测通过, 案销)**: 视觉问题全清 — Negative y size 刷屏归零, 石柱消失, 复制粘贴感/错位无残留; 生成速率 500 chunks/sec, 87% 时间满速, ETA 30min (原版 RD5 + DH RD512 全图完成)。看点 (3) 分支预案命中: LOD 整体矮 ~64 → DH 存储层 y 语义 = 距世界底偏移 (与 bottom=0 契约自洽), 待小修: 顶转相对 (top - minY)。新独立案: 地表方块全石头 (裸 DH 无此问题; 疑 TD 管线只输出高度图、表面方块类型未喂, 根源待查证后定论, 勿提前下结论)。
+### 案 III: LOD 整体矮 64 (案 II 看点(3) 分支预案命中, 2026-11-16 00:18 修复, memory 095)
+
+**根因**: DH 存储层 y 语义 = 距世界底偏移 (相对 y), 与案 II 的 bottom=0 契约互证 — bottom=0 被解释为世界底而非绝对 y=0。案 II 修复时 top 保持绝对坐标 → 渲染位置 = 世界底(绝对-64) + 绝对y → 整体矮 |minY| = 64。
+
+**修法 (08606e2, 已部署 TEST)**: generateInternal 内全部 y 统一转相对 (yRel = yAbs - minY):
+- dataBottom = 0 (相对语义: 0 即世界底, 主世界对应绝对 -64)
+- maxY = getMaxHeight() - minY (主世界 384)
+- solidTop / waterTop 各 -minY (clampY 钳位域随之相对化)
+
+**证据链 (090/091 原则)**: diff 三 hunk 逐字验证 → 构建 35s 绿 (schtasks tdhb1115) → 产物 13123B → 部署 MD5 双端一致 (F531D151AA2B2313570C2CAECFCD421A) → javap 直验部署物: 两处 convertToMinecraftHeight 后均见 iconst_1 iadd + iload minY + isub + clampY (偏移 425-440 / 471-486), 旧 jar 同检索零匹配 → push fa60d99..08606e2 → 回滚锚 D:\temp\tdh-010-s2b.bak。
+
+**重测清单 (待 max)**: (1) 必须新世界或删旧世界 data\DistantHorizons.sqlite — 旧库缓存矮64 LOD, DH 不重刷已生成数据 (2) RD5 真实地形与 LOD 衔接地平线高度差应归零, 水面高度同查 (3) 生成速率应不变 (y 改动不碰 xz/数据量) (4) 若仍不对: 嫌疑 convertToMinecraftHeight 本身或 top+1 边界语义, 拿具体坐标点高度差逐一对。
+
+### 案② 地表全石 定性与选项 (2026-11-16, 呈 max 待答)
+
+**定性: S2b 设计债, 非 bug**。TdConfig surfaceBlock 默认 minecraft:stone (S2b 占位, 注释明写 S4 换真数据); 本模组走高度图翻译, 方块类型天然缺席, 裸 DH 逐 chunk 扫真实方块故无此问题。TD 查询面 (getRiverTerrainData) 侧 waterMask/waterSurface 随 withBiomes=false 白送, 但方块类型不在输出里。
+
+**选项 (2026-11-16 夜呈报, 未答不动)**: 0 实例 config 改 grass_block (零代码, 全图均匀草绿) / a 高度启发式假数据 (水下沙-低地草-高山石-山顶雪, ~25行, 视觉可信, 算 S2c) / b TD 真群系 (withBiomes=true + keyForIndex 映射, S4 正主, 查询负载 ~3.5 倍) / c 保持石头等 S4。
