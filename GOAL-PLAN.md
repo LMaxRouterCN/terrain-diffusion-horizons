@@ -9,7 +9,7 @@
 - 包名: com.lmaxrouter.terraindiffusionhorizons
 - 目录: D:\Documents\mcmod\Terrain Diffusion Horizons
 - 目标环境: MC 1.20.1 Forge + DH 3.3.3 (forge-fabric 版)
-- 许可证: MPL-2.0 (正式文本待补)
+- 许可证: MPL-2.0 (全文 16726B, 自 S2a 737e510 起入库)
 - 版本: 0.1.0 起, 三位式
 
 ## 依赖拓扑 (2026-11-14 max 拍板)
@@ -108,7 +108,7 @@
 - DH 挂钩姿势: mods.toml 软依赖 + 代码侧 ModList.isLoaded 双宿主检测 (缺席静默闲置)
 - 烟雾启动 = 裸 runClient (不带 DH/TD): 验证壳 + mods.toml 解析 + 无宿主退化路径
 - 待验证 (S2b 运行时): DH modid 是否 "distanthorizons"; TD fml id "terrain_diffusion_mc" 已从源实证
-- 遗留: LICENSE 已定稿 (MPL-2.0 全文, mozilla.org 正源); 首构建时间由 max 醒后拍板
+- 遗留: 主线等 max 重测 (d759a33 已构建部署); 副线: .gitignore (libs/, build-last.log) 与 GitHub 建仓待 max 决策
 
 ## S2b 前置 API 签名案卷 (2026-11-14 夜, javap 实证)
 - generateLod 全签名: generateLod(int x, int z, int minX, int minZ, byte detailLevel,
