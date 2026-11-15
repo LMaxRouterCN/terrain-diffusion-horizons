@@ -245,3 +245,42 @@ widthInColumns 参数保留 (dl>0 时列宽 2^dl, 未来扩展); 建议同时在
 **定性: S2b 设计债, 非 bug**。TdConfig surfaceBlock 默认 minecraft:stone (S2b 占位, 注释明写 S4 换真数据); 本模组走高度图翻译, 方块类型天然缺席, 裸 DH 逐 chunk 扫真实方块故无此问题。TD 查询面 (getRiverTerrainData) 侧 waterMask/waterSurface 随 withBiomes=false 白送, 但方块类型不在输出里。
 
 **选项 (2026-11-16 夜呈报, 未答不动)**: 0 实例 config 改 grass_block (零代码, 全图均匀草绿) / a 高度启发式假数据 (水下沙-低地草-高山石-山顶雪, ~25行, 视觉可信, 算 S2c) / b TD 真群系 (withBiomes=true + keyForIndex 映射, S4 正主, 查询负载 ~3.5 倍) / c 保持石头等 S4。
+
+## 2026-11-16 02:30 · 案①+案②α 双修落地 (commit 923275a, 部署+验尸全绿)
+
+**案① (LOD 顶面高 1 格) 定案与修法**:
+- 根因: convertToMinecraftHeight 语义 = "第一个空气 y" — density 函数数学 / FeaturePlacer 使用姿势 / mixin 注释 /
+  DH 半开区间端点 / 实测高 1 格, 五证合一; 旧码 +1 属双重补偿 → LOD 实体段整体高 1 格。
+- 修法: solidTop / waterTop 两处删 +1。
+- 字节码验尸 (javap -p -c 直验部署物): convert 调用点 (偏移 450/506) 后直接 iload+isub, 无 iconst_1 iadd;
+  局部槽 12→13 (withBiomes 新局部) 佐证验的是新码。
+
+**案②α (群系驱动表面方块/色调)**:
+- TdSurfaceBlockMap (新): 65 群系全表 (主导表面/水下顶部/冰盖三元组), vanilla surface rule 的
+  "LOD 输入可达分支" 剪枝复刻 — 数据 (biomeIndexes) 与规则 (群系->主导方块) 均与 chunk 生成同源;
+  NETHER/END/CAVE 16 条纯防御 fallback。
+- TdConfig: +useBiomeSurface (withBiomes 门控; 内存 ~520MB vs ~150MB TEST 实测; false 一键退纯几何),
+  +surfaceBlockOverrides 稀疏覆盖 (仅地表字段); surfaceBlock/fillerBiome 降为 fallback。
+- TdDhWorldGenerator: withBiomes 门控查询; biomeIndexes → keyForIndex → ColumnStyle (ConcurrentHashMap 缓存,
+  DH 池多线程, 良性竞争); 水列顶部用群系水下方块 (河床/海床); 冻河/冻洋水段顶换冰; 群系 wrapper 进
+  data point (DH 远距渲染吃 biome tint, 色调随群系)。
+- API 风险预杀: 编译期 td_jar 与 TEST 部署物 MD5 双端一致 (5314B5B7...), javap 部署物 keyForIndex/instance
+  全 public → 编译面=运行面, NoSuchMethodError 不可能。
+
+**部署与验尸证据链 (090/091 原则)**:
+- build 37s 真绿 (EXIT=0 + 大小写敏感 BUILD SUCCESSFUL + mtime, 080 假绿前科不复犯)。
+- jar 13123B → 18090B; MD5 SRC=DST=70FDE76E5E55B93CE41CC79655308900; 回滚锚 D:\temp\tdh-pre-alpha.bak
+  (F531D151... = 08606e2 版原部署物, 血统可溯)。
+- zip 字节级直搜: 表类 grass_block/orange_terracotta/minecraft:ice 全 True;
+  Generator minecraft:ice/keyForIndex/surfaceBlockOverrides 全 True。
+
+**重测指引 (max)**:
+- 必须新世界, 或删 saves\<世界>\data\DistantHorizons.sqlite (LOD 缓存不刷新, 旧数据掩盖新生成)。
+- 验收: 案① LOD 顶面与近处真实地形齐平; 案② 草原绿/沙漠黄/雪原白/恶地橙 + 远景色调随群系 + 冻河冰面。
+- 观察项: TerrainBiomeRegistry 懒 init 双载 (评估低风险, 首报重测日志); 内存峰值 (true 档 ~520MB 量级)。
+
+**本轮事故与遗留**:
+- 指令格式事故三起 (12 条 replace 双块未闭合全灭 / 部署块孤立标签毒化 / memory+remember 内容嵌标签截断),
+  全部零副作用恢复, 教训入 memory 099/100。
+- .gitignore 工作区损毁 (注释丢失/条目丢失/粘连; 非本会话所改, 疑框架手笔), 未 commit 未恢复, 待 max 定夺;
+  副作用: libs/ 与 build-last.log 脱离忽略名单 (status 挂未跟踪)。
