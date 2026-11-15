@@ -22,16 +22,19 @@ public final class TdLodTranslator {
     /**
      * 数据源覆盖的块矩形, 即 TD getRiverTerrainData 的 i/j 输入.
      *
-     * <p>[假设-待运行时首调日志验证] posX/posZ = 数据源 min 角的"块"坐标,
-     * 数据源为正方形, 边长 = 列宽 x 列数. 若实证为 chunk 或列单位,
-     * 只需在本方法内加换算系数.</p>
+     * <p>[实证 2026-11-15, GOAL-PLAN 数据正确性案] posX/posZ 单位 = 数据源边长(块) = 2^(dl+6),
+     * dl0 即 64; 数据源恒 64x64 列 x 列宽 1 块, 边长与 widthInColumns 无关.
+     * 旧假设 (pos = min 角块坐标) 被双会话首调比值恒 4 + DH 调用方字节码推翻, 弃.</p>
      *
-     * @param widthInColumns pooledFullDataSource.getWidthInDataColumns()
+     * @param widthInColumns pooledFullDataSource.getWidthInDataColumns() (dl0 恒 64, 留作 dl>0 扩展)
      * @return [i1, j1, i2, j2] = [Zmin, Xmin, Zmax, Xmax], 闭开区间 (TD: i=Z, j=X)
      */
     public static int[] dataSourceBlockBounds(int posX, int posZ, byte apiDetailLevel, int widthInColumns) {
-        int span = columnWidthBlocks(apiDetailLevel) * widthInColumns;
-        return new int[]{posZ, posX, posZ + span, posX + span};
+        // pos 单位 = 数据源边长(块) = 2^(dl+6), dl0 即 64 [实证 2026-11-15]
+        int size = columnWidthBlocks(apiDetailLevel);
+        int bx = posX * size;
+        int bz = posZ * size;
+        return new int[]{bz, bx, bz + size, bx + size};
     }
 
     /**

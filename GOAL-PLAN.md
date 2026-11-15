@@ -186,3 +186,28 @@
 - [x] DhCompat 真注册 (LevelLoad 事件 + 守卫过滤 + worldGenOverrides)
 - [x] TdConfig (JSON 三键)
 - [x] 烟雾 → max 已实测 TEST 联跑 (2026-11-15): 开机雷根修 6ba4e32 (versionRange [2.3,9.4)); 实测暴露远距零生成 → 已定案 2026-11-15 05:12 首调日志: mode=FEATURES 被守卫 2 静默拒 (DH 队列 mode 直传 config chunkGeneratorMode, 默认 FEATURES, 合法值无 SURFACE → 守卫 SURFACE 分支为死分支, 黑名单反拦默认流量); 修法: 守卫 2 反转白名单只拒 PRE_EXISTING_ONLY; 已修+部署 TEST, 待重测; build 绿链: fc5aa05 + 1770612 + 6ba4e32 (3e5f985 假绿案见 memory 080)
+
+
+## 2026-11-15 07:10 · 数据正确性案根因定案 (S2b 重测轮, max 睡眠期间完成)
+
+**重测结果**: LOD 显示 = 全链路通, 零生成案正式结案。新症状: 地形重复 / 网格不对齐 / 冲天石柱 / 精细度坏 / 部分块闪现闪消。
+
+**根因 (双重 64 倍, 三路独立实证)**:
+1. pos 单位错: generateLod 的 posX/posZ 单位 = 数据源边长(块) = 2^(apiDl+6), dl0 即 64 块, 不是块坐标。
+   证据: (a) WorldGenerationQueue 调用点字节码: DhSectionPos.getX/getZ, 核心dl = apiDl+6, 段坐标 1 单位 = 2^核心dl 块; (b) DhWorldGenerator.generateLod 开头 powerOfTwo(apiDl+6) = 数据源边长; (c) 双会话首调 chunkMin/pos 比值恒 4 (chunk 16 块 x 4 = 64)。
+2. span 错: FullDataSourceV2 恒 64x64 数据列, dl0 列宽 1 块, 总边长 64 块。旧代码 span = columnWidthBlocks x widthInColumns = 4096, 大 64 倍。
+
+**症状映射**: 约 16 个数据源全查原点附近同一 4096x4096 区域 (pos 未乘 64, 值仅 20 上下), 写入循环只取返回数组左上 64x64 角落 -> 每块 LOD 贴同一片地 = 重复+错位; 角落疑含模型边缘垃圾高度 = 冲天石柱 (推测); 错位数据下采样 = 精细度坏。放大消失/闪现闪消未归因, 修后看残留。
+
+**修法 (已定案, 未应用, 等 max 拍板)**: TdLodTranslator.dataSourceBlockBounds:
+
+    int size = columnWidthBlocks(apiDetailLevel); // 数据源边长(块), dl0 = 64
+    int bx = posX * size;
+    int bz = posZ * size;
+    return new int[]{bz, bx, bz + size, bx + size};
+
+widthInColumns 参数保留 (dl>0 时列宽 2^dl, 未来扩展); 建议同时在生成器加 data.width 与 cols 一致性校验。
+
+**明早验证清单**: (1) 修后重测: 重复/错位应消失 (2) TD 64x64 小查询的 data.width 契约 (应 = 64) (3) i/j 轴序 (Z,X) 视觉实证 (4) 残留症状单独再评 (5) 单查询采样 16.7M -> 4K, DH 生成速率应显著回升。
+
+**环境事实存档**: 06:40 会话 mode=FEATURES (守卫 2 放行路径实证), ds=FullDataSourceV2, 全程零 warn; 世界 105 sqlite 5.5MB; latest.log 06:54:59; java 已退出。

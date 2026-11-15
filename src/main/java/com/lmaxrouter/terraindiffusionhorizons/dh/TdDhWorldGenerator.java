@@ -146,6 +146,11 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
             return;
         }
 
+        // [契约观测 2026-11-15] TD 数组宽应与 DH 数据源列数一致 (dl0 均 64); 不符仅告警不中断, 留运行时证据
+        if (data.width != cols) {
+            LOG.warn("TD data.width({}) != DH cols({}), 采样索引可能越界/错位", data.width, cols);
+        }
+
         // ==== wrapper 懒取 (字符串获取抛 checked IOException, 失败则放弃本数据源) ====
         if (!resolveWrappers()) {
             return;
