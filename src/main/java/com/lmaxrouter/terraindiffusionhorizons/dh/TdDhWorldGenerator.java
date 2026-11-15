@@ -1,5 +1,6 @@
 package com.lmaxrouter.terraindiffusionhorizons.dh;
 
+import com.github.xandergos.terraindiffusionmc.biome.TerrainBiomeRegistry;
 import com.github.xandergos.terraindiffusionmc.pipeline.LocalTerrainProvider;
 import com.github.xandergos.terraindiffusionmc.world.HeightConverter;
 import com.lmaxrouter.terraindiffusionhorizons.TdConfig;
@@ -19,12 +20,13 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
- * TD -> DH 的 LOD 生成器 (S2b: 地形几何 + 水体; 群系/表面方块占位, S4 换真数据).
+ * TD -> DH 的 LOD 生成器 (案②α: 地形几何 + 水体 + 群系驱动表面方块/色调).
  *
  * <p>列写入协议: setApiDataPointColumn(x, z, list) 的 x/z 是数据源内局部索引,
  * 列内点自底向上无缝平铺, 全部列写完后 resultConsumer.accept(dataSource) 恰一次
@@ -45,6 +47,12 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
     private IDhApiBlockStateWrapper surfaceBlock;
     private IDhApiBlockStateWrapper waterBlock;
     private IDhApiBlockStateWrapper airBlock;
+    /** 案②α: 冰盖水段替换方块 (冻河/冻洋). */
+    private IDhApiBlockStateWrapper iceBlock;
+    /** 案②α: 纯几何/解析失败回退样式 (config surfaceBlock + fillerBiome). */
+    private ColumnStyle fallbackStyle;
+    /** 案②α: 群系 key -> 列表面样式缓存 (DH 池多线程; 并发重复构造等价无害). */
+    private final ConcurrentHashMap<String, ColumnStyle> styleCache = new ConcurrentHashMap<>();
 
     public TdDhWorldGenerator(IDhApiLevelWrapper levelWrapper, long worldSeed) {
         this.levelWrapper = levelWrapper;
@@ -132,11 +140,13 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
             LOG.warn("seed 不符 (TD={} 期望={}), 跳过本数据源", LocalTerrainProvider.getSeed(), expectedSeed);
             return;
         }
-        // ==== TD 查询 (块坐标, i=Z j=X; withBiomes=false: S2b 占位不需要 climate/biome, 数据量 520MB->150MB) ====
+        // ==== TD 查询 (块坐标, i=Z j=X) ====
+        // 案②α: withBiomes 门控 (内存 ~520MB vs ~150MB, TEST 实测; config 关掉即退纯几何模式)
+        boolean withBiomes = TdConfig.get().useBiomeSurface;
         int[] b = TdLodTranslator.dataSourceBlockBounds(posX, posZ, detailLevel, cols);
         LocalTerrainProvider.RiverTerrainData data;
         try {
-            data = LocalTerrainProvider.getRiverTerrainData(b[0], b[1], b[2], b[3], false);
+            data = LocalTerrainProvider.getRiverTerrainData(b[0], b[1], b[2], b[3], withBiomes);
         } catch (Exception e) {
             LOG.warn("TD 查询失败 [i1={},j1={},i2={},j2={}]: {}", b[0], b[1], b[2], b[3], e.toString());
             return;
@@ -168,27 +178,33 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         float[] elev = data.elevation;        // 海拔米 (行主序 idx = z*width + x)
         byte[] waterMask = data.waterMask;    // 1 = 水下
         float[] waterSurf = data.waterSurface; // 水面海拔米 (可能为 null)
+        short[] biomeIdx = withBiomes ? data.biomeIndexes : null; // 案②α: 群系索引 (withBiomes=true 时非 null)
 
         for (int x = 0; x < cols; x++) {
             for (int z = 0; z < cols; z++) {
                 int idx = TdLodTranslator.sampleIndex(x, z, width);
-                int solidTop = clampY(HeightConverter.convertToMinecraftHeight((short) elev[idx]) + 1 - minY, dataBottom, maxY); // -minY: 绝对 y 转相对 [长期记忆: 095]
+                // 案①: convert() = 第一个空气 y (density 函数/mixin/FeaturePlacer 五证合一), topY 同语义直接用, 不再 +1
+                int solidTop = clampY(HeightConverter.convertToMinecraftHeight((short) elev[idx]) - minY, dataBottom, maxY); // -minY: 绝对 y 转相对 [长期记忆: 095]
                 int coverTop = solidTop;
+                boolean waterCol = waterMask != null && waterMask[idx] != 0 && waterSurf != null;
                 // 水体列: 水面高于地形才成池 (waterMask 优先, 液面 <= 地形视为无水)
-                if (waterMask != null && waterMask[idx] != 0 && waterSurf != null) {
-                    int waterTop = clampY(HeightConverter.convertToMinecraftHeight((short) waterSurf[idx]) + 1 - minY, dataBottom, maxY); // -minY: 绝对 y 转相对 [长期记忆: 095]
+                if (waterCol) {
+                    int waterTop = clampY(HeightConverter.convertToMinecraftHeight((short) waterSurf[idx]) - minY, dataBottom, maxY); // 案①同修: 同语义不加 1
                     if (waterTop > solidTop) {
                         coverTop = waterTop;
                     }
                 }
+                // 案②α: 列表面样式 (群系驱动; 查询未带群系时退 fallback)
+                ColumnStyle style = biomeIdx != null ? resolveStyle(biomeIdx[idx]) : fallbackStyle;
                 List<DhApiTerrainDataPoint> points = new ArrayList<>(3);
                 // [长期记忆: 092] 段底喂 dataBottom (非负): 喂 minY=-64 被 DH 12 位无符号存储回绕成 4032 → 冲天石柱元凶
-                points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop, surfaceBlock, fillerBiome));
+                // 水列顶部用地表下顶部方块 (vanilla 水下分支同源); 冰盖群系水段顶换冰
+                points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop, waterCol ? style.underwater : style.surface, style.biome));
                 if (coverTop > solidTop) {
-                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, coverTop, waterBlock, fillerBiome));
+                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, coverTop, style.iceCover ? iceBlock : waterBlock, style.biome));
                 }
                 if (coverTop < maxY) {
-                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, coverTop, maxY, airBlock, fillerBiome));
+                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, coverTop, maxY, airBlock, style.biome));
                 }
                 // 4 参显式版: 3 参 default 已弃用, 其字节码转发 4 参时 step 固定 SURFACE (javap 实证, 同值替换行为无损)
                 dataSource.setApiDataPointColumn(x, z, EDhApiWorldGenerationStep.SURFACE, points);
@@ -217,6 +233,9 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
             // API 工厂无水专用方法, 按默认方块状态取 (水的默认 state 即静止水)
             waterBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:water", levelWrapper);
             airBlock = DhApi.Delayed.wrapperFactory.getAirBlockStateWrapper();
+            iceBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:ice", levelWrapper);
+            // 案②α: fallback 样式 = 纯几何模式旧路径 (表面=水下=cfg.surfaceBlock, 无冰盖)
+            fallbackStyle = new ColumnStyle(surfaceBlock, surfaceBlock, fillerBiome, false);
             return true;
         } catch (Exception e) {
             LOG.warn("wrapper 获取失败 (配置: surface={} biome={}): {}", cfg.surfaceBlock, cfg.fillerBiome, e.toString());
@@ -224,6 +243,59 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         }
     }
 
+    // ==== 案②α: 群系驱动的列表面样式 ====
+
+    /** 不可变列样式: 表面/水下方块 wrapper + 群系 wrapper + 冰盖标志. */
+    private static final class ColumnStyle {
+        final IDhApiBlockStateWrapper surface;
+        final IDhApiBlockStateWrapper underwater;
+        final IDhApiBiomeWrapper biome;
+        final boolean iceCover;
+
+        ColumnStyle(IDhApiBlockStateWrapper surface, IDhApiBlockStateWrapper underwater,
+                    IDhApiBiomeWrapper biome, boolean iceCover) {
+            this.surface = surface;
+            this.underwater = underwater;
+            this.biome = biome;
+            this.iceCover = iceCover;
+        }
+    }
+
+    /**
+     * biomeIndex -> 列表面样式 (带缓存).
+     * registry.keyForIndex 对未注册索引无空检查 (NPE 风险已知), 异常/未知 key 全部落 fallback.
+     * 群系 wrapper 直接用 TD catalog key (minecraft:xxx), 与 chunk 侧 BiomeSource 同源.
+     */
+    private ColumnStyle resolveStyle(short biomeIndex) {
+        String key;
+        try {
+            key = TerrainBiomeRegistry.instance().keyForIndex(biomeIndex);
+        } catch (Exception e) {
+            return fallbackStyle;
+        }
+        if (key == null) {
+            return fallbackStyle;
+        }
+        ColumnStyle cached = styleCache.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        // 构造 (良性竞争: 并发重复构造等价无害, put 覆盖同值)
+        TdConfig cfg = TdConfig.get();
+        String surfaceId = cfg.surfaceBlockOverrides.getOrDefault(key, TdSurfaceBlockMap.surface(key));
+        try {
+            ColumnStyle s = new ColumnStyle(
+                    DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(surfaceId, levelWrapper),
+                    DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(TdSurfaceBlockMap.underwater(key), levelWrapper),
+                    DhApi.Delayed.wrapperFactory.getBiomeWrapper(key, levelWrapper),
+                    TdSurfaceBlockMap.iceCover(key));
+            styleCache.put(key, s);
+            return s;
+        } catch (Exception e) {
+            LOG.warn("群系样式构造失败 ({}): {}, 本数据源退 fallback", key, e.toString());
+            return fallbackStyle;
+        }
+    }
     /** DH 生成任务开始前钩子 (S2b 无需准备, 留空). */
     @Override
     public void preGeneratorTaskStart() {
@@ -239,5 +311,8 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         surfaceBlock = null;
         waterBlock = null;
         airBlock = null;
+        iceBlock = null;
+        fallbackStyle = null;
+        styleCache.clear();
     }
 }

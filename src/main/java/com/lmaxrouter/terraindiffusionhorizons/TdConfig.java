@@ -7,9 +7,11 @@ import org.slf4j.Logger;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
- * TDH 配置 (S2b 三键版).
+ * TDH 配置 (案②α 五键版).
  *
  * <p>播种式落盘: 首次运行在 config/ 写出默认 JSON, 之后读用户手改的文件;
  * 文件损坏时回退默认值且不覆盖坏文件 (日志警告, 便于人工排查).</p>
@@ -22,16 +24,22 @@ public final class TdConfig {
     private static final Path CONFIG_PATH =
             FMLPaths.CONFIGDIR.get().resolve("terraindiffusionhorizons.json");
 
-    // ---- 三个配置键 (S2b; S4 扩展 TD 表面规则项) ----
+    // ---- 五个配置键 (案②α: 表面方块群系驱动) ----
 
     /** 总开关: false = 不注册生成器, DH 走原生路径 (改动需重进世界生效). */
     public boolean enabled = true;
 
-    /** S2b 占位表面方块 (原版 ID); S4 换成 TD biomeIndexes + climate 推导. */
+    /** 表面方块 fallback (原版 ID): useBiomeSurface=false 或群系解析失败时使用 (S2b 旧主路径降级). */
     public String surfaceBlock = "minecraft:stone";
 
-    /** S2b 占位填充群系 (原版 ID); S4 换成 keyForIndex 真映射. */
+    /** 填充群系 fallback (原版 ID): 纯几何模式 (useBiomeSurface=false) 下 data point 携带的群系. */
     public String fillerBiome = "minecraft:plains";
+
+    /** 案②α: true = TD 群系驱动表面方块 (withBiomes 查询 + 表映射, 与 chunk 生成同源); false = 纯几何占位 (内存 ~150MB). */
+    public boolean useBiomeSurface = true;
+
+    /** 案②α: 群系 key -> 方块 ID 稀疏覆盖, 仅覆地表字段 (水列方块与冰盖不受影响; 空 = 全用内置表). */
+    public Map<String, String> surfaceBlockOverrides = new LinkedHashMap<>();
 
     // ---- 加载与播种 ----
 
