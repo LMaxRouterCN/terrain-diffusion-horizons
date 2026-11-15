@@ -26,7 +26,7 @@ public final class TdSurfaceBlockMap {
     /** 一个群系的 LOD 列表面样式. */
     public static final class SurfaceStyle {
         public final String surface;    // 地表 (干列) 方块
-        public final String underwater; // 水列顶部 (河床/海床) 方块
+        public final String underwater; // 水列顶部 (海床) 方块; 河床由水强度分档 [C], 河群系此字段不消费
         public final boolean iceCover;  // 水面是否结冰 (冻河/冻洋)
 
         private SurfaceStyle(String surface, String underwater, boolean iceCover) {
@@ -52,9 +52,9 @@ public final class TdSurfaceBlockMap {
         def("minecraft:flower_forest", "minecraft:grass_block", "minecraft:dirt", false);
         def("minecraft:dark_forest", "minecraft:grass_block", "minecraft:dirt", false);
         def("minecraft:taiga", "minecraft:grass_block", "minecraft:dirt", false);
-        // podzol 属 feature 层, LOD 固有损失, 表面仍 grass
-        def("minecraft:old_growth_pine_taiga", "minecraft:grass_block", "minecraft:dirt", false);
-        def("minecraft:old_growth_spruce_taiga", "minecraft:grass_block", "minecraft:dirt", false);
+        // podzol: vanilla 表面规则实为 grass, 近处大片 podzol 来自 feature 层铺设; LOD 视觉近似直接用 podzol [B3]
+        def("minecraft:old_growth_pine_taiga", "minecraft:podzol", "minecraft:dirt", false);
+        def("minecraft:old_growth_spruce_taiga", "minecraft:podzol", "minecraft:dirt", false);
         def("minecraft:cherry_grove", "minecraft:grass_block", "minecraft:dirt", false);
         def("minecraft:pale_garden", "minecraft:grass_block", "minecraft:dirt", false);
         def("minecraft:meadow", "minecraft:grass_block", "minecraft:dirt", false);
@@ -68,7 +68,7 @@ public final class TdSurfaceBlockMap {
         def("minecraft:windswept_savanna", "minecraft:grass_block", "minecraft:dirt", false);
         def("minecraft:swamp", "minecraft:grass_block", "minecraft:dirt", false);
 
-        // ---- 雪盖系: vanilla 为草+顶雪层, LOD 单方块取 snow_block 保雪感 ----
+        // ---- 雪盖系: vanilla 为草+顶雪层, LOD 单方块取 snow_block 保雪感; snowy_beach 顶沙近处白雪来自雪片 feature, snow precip 群系统一 snow_block 近似 [B1/B2] ----
         def("minecraft:snowy_plains", "minecraft:snow_block", "minecraft:dirt", false);
         def("minecraft:snowy_taiga", "minecraft:snow_block", "minecraft:dirt", false);
         def("minecraft:ice_spikes", "minecraft:snow_block", "minecraft:dirt", false);
@@ -107,9 +107,9 @@ public final class TdSurfaceBlockMap {
         def("minecraft:frozen_ocean", "minecraft:gravel", "minecraft:gravel", true);
         def("minecraft:deep_frozen_ocean", "minecraft:gravel", "minecraft:gravel", true);
 
-        // ---- 河流: vanilla 河床 sand 主导, 冻河冰盖 ----
-        def("minecraft:river", "minecraft:sand", "minecraft:sand", false);
-        def("minecraft:frozen_river", "minecraft:sand", "minecraft:sand", true);
+        // ---- 河流: 河岸草主导 (vanilla 河群系 surface = grass), 河床归水强度分档 [C], 冻河冰盖; underwater 字段 fluvial 列不消费 (死字段) ----
+        def("minecraft:river", "minecraft:grass_block", "minecraft:sand", false);
+        def("minecraft:frozen_river", "minecraft:grass_block", "minecraft:sand", true);
 
         // ---- 下界/末地/洞穴/虚空: 主世界 tile 不应出现 (分类器 canGenerateOverworld 过滤), 防御 fallback ----
         def("minecraft:nether_wastes", "minecraft:stone", "minecraft:dirt", false);

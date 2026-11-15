@@ -49,6 +49,10 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
     private IDhApiBlockStateWrapper airBlock;
     /** 案②α: 冰盖水段替换方块 (冻河/冻洋). */
     private IDhApiBlockStateWrapper iceBlock;
+    /** [C] 河床强度分档方块 (per-column 选择, 不进 styleCache). */
+    private IDhApiBlockStateWrapper sandBlock;
+    private IDhApiBlockStateWrapper gravelBlock;
+    private IDhApiBlockStateWrapper clayBlock;
     /** 案②α: 纯几何/解析失败回退样式 (config surfaceBlock + fillerBiome). */
     private ColumnStyle fallbackStyle;
     /** 案②α: 群系 key -> 列表面样式缓存 (DH 池多线程; 并发重复构造等价无害). */
@@ -174,9 +178,10 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         int minY = levelWrapper.getMinHeight();
         int dataBottom = 0; // 相对语义: 0 = 世界底 (主世界即绝对 -64); 地下不可见不写段, 与官方模板同构
         int maxY = levelWrapper.getMaxHeight() - minY; // 维度顶转相对 (主世界 320-(-64) = 384)
+        int seaTop = clampY(HeightConverter.convertToMinecraftHeight((short) 0) - minY, dataBottom, maxY); // [O] 海平面 (convert(0)=63): 海洋列水段顶, 循环外常量
         int width = data.width;               // TD 数组宽 = X 向块数
         float[] elev = data.elevation;        // 海拔米 (行主序 idx = z*width + x)
-        byte[] waterMask = data.waterMask;    // 1 = 水下
+        byte[] waterMask = data.waterMask;    // 水强度 0-255 (>=8 有效, <8 边缘抗锯齿格 [W])
         float[] waterSurf = data.waterSurface; // 水面海拔米 (可能为 null)
         short[] biomeIdx = withBiomes ? data.biomeIndexes : null; // 案②α: 群系索引 (withBiomes=true 时非 null)
 
@@ -186,20 +191,44 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                 // 案①: convert() = 第一个空气 y (density 函数/mixin/FeaturePlacer 五证合一), topY 同语义直接用, 不再 +1
                 int solidTop = clampY(HeightConverter.convertToMinecraftHeight((short) elev[idx]) - minY, dataBottom, maxY); // -minY: 绝对 y 转相对 [长期记忆: 095]
                 int coverTop = solidTop;
-                boolean waterCol = waterMask != null && waterMask[idx] != 0 && waterSurf != null;
-                // 水体列: 水面高于地形才成池 (waterMask 优先, 液面 <= 地形视为无水)
-                if (waterCol) {
+                // [W] waterMask 为 0-255 强度: <8 是边缘抗锯齿格 (TD chunk 侧同样跳过); NaN 液面一并防御
+                int strength = waterMask != null ? (waterMask[idx] & 0xFF) : 0;
+                boolean fluvialCol = strength >= 8 && waterSurf != null && Float.isFinite(waterSurf[idx]);
+                // [O] 海洋 cell 的 elevation 是负米海床深度 (BiomeClassifier.isOcean = elev < 0)
+                boolean oceanCol = elev[idx] < 0f;
+                boolean waterCol = false;
+                // 水体列一 (fluvial 河流): 液面高于地形才成池 (液面 <= 地形视为无水, TD chunk 同语义)
+                if (fluvialCol) {
                     int waterTop = clampY(HeightConverter.convertToMinecraftHeight((short) waterSurf[idx]) - minY, dataBottom, maxY); // 案①同修: 同语义不加 1
-                    if (waterTop > solidTop) {
+                    if (waterTop > coverTop) {
                         coverTop = waterTop;
+                        waterCol = true;
                     }
+                }
+                // 水体列二 (ocean 海洋): 水段 [海床, seaTop(=y63)]; TD 侧 applyRiverBiomesFromWindow 对
+                // ocean cell 跳过河群系 -> fluvial/ocean 互斥, 此处防御取液面高者
+                if (oceanCol && seaTop > coverTop) {
+                    coverTop = seaTop;
+                    waterCol = true;
                 }
                 // 案②α: 列表面样式 (群系驱动; 查询未带群系时退 fallback)
                 ColumnStyle style = biomeIdx != null ? resolveStyle(biomeIdx[idx]) : fallbackStyle;
                 List<DhApiTerrainDataPoint> points = new ArrayList<>(3);
-                // [长期记忆: 092] 段底喂 dataBottom (非负): 喂 minY=-64 被 DH 12 位无符号存储回绕成 4032 → 冲天石柱元凶
-                // 水列顶部用地表下顶部方块 (vanilla 水下分支同源); 冰盖群系水段顶换冰
-                points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop, waterCol ? style.underwater : style.surface, style.biome));
+                // [长期记忆: 092] 段底喂 dataBottom (非负): 负值被 DH 12 位无符号存储回绕成 4032 → 冲天石柱元凶 (已修)
+                // 水列底段方块: ocean 列 = 群系海床方块, fluvial 列按水强度分档 [C] (经验配比 + 空间散列, 键用世界块坐标)
+                IDhApiBlockStateWrapper bedBlock = style.surface;
+                if (waterCol) {
+                    bedBlock = style.underwater;
+                    if (fluvialCol) {
+                        int gx = b[1] + x; // b = [i1(Z起), j1(X起), i2, j2] -> gx/gz = 世界块坐标
+                        int gz = b[0] + z;
+                        int h = (gx * 0x9E3779B9 + gz * 0x85EBCA6B) >>> 24; // 确定性散列取高 8 位 [0,255]
+                        bedBlock = strength < 72
+                                ? (h < 160 ? sandBlock : gravelBlock) // 弱水: 沙 62.5% / 砾 37.5%
+                                : (h < 218 ? gravelBlock : clayBlock); // 强水: 砾 85.2% / 黏土 14.8%
+                    }
+                }
+                points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop, bedBlock, style.biome));
                 if (coverTop > solidTop) {
                     points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, coverTop, style.iceCover ? iceBlock : waterBlock, style.biome));
                 }
@@ -234,6 +263,10 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
             waterBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:water", levelWrapper);
             airBlock = DhApi.Delayed.wrapperFactory.getAirBlockStateWrapper();
             iceBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:ice", levelWrapper);
+            // [C] 河床强度分档方块 (与基本件同期懒取, 任一失败整体放弃本数据源)
+            sandBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:sand", levelWrapper);
+            gravelBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:gravel", levelWrapper);
+            clayBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:clay", levelWrapper);
             // 案②α: fallback 样式 = 纯几何模式旧路径 (表面=水下=cfg.surfaceBlock, 无冰盖)
             fallbackStyle = new ColumnStyle(surfaceBlock, surfaceBlock, fillerBiome, false);
             return true;
@@ -312,6 +345,9 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         waterBlock = null;
         airBlock = null;
         iceBlock = null;
+        sandBlock = null;
+        gravelBlock = null;
+        clayBlock = null;
         fallbackStyle = null;
         styleCache.clear();
     }
