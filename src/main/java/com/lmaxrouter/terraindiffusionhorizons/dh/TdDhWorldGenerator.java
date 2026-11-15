@@ -157,12 +157,13 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         }
 
         // ==== 双循环写列 ====
-        // y 段按半开区间 [bottom, top) 写, 段底一律非负 — 官方模板 (0,h)+(h,顶) 的 0 是承重契约, 非占位.
-        // [长期记忆: 092] DH 存储 y 为 12 位无符号: 负 bottom (minY=-64) 回绕成 4032 → bottom>top 几何倒挂 → 冲天石柱 + Negative y size 刷屏.
-        // 顶保持绝对坐标 (实证原样入库渲染正确); 分支预案: 修后若地形整体下沉 64, 则 DH 语义为相对 y, 顶需转相对 (见 092).
+        // y 段按半开区间 [bottom, top) 写.
+        // [长期记忆: 092] DH 存储 y 为 12 位无符号: 负 bottom (minY=-64) 回绕成 4032 → bottom>top 几何倒挂 → 冲天石柱 + Negative y size 刷屏 (已修).
+        // [长期记忆: 095] DH y 语义 = 距世界底偏移 (相对 y): 4032 修复时顶保持绝对坐标 → 重测整体矮 ~64 (=|minY|), 092 预案命中.
+        // 故全部 y 统一转相对: yRel = yAbs - minY; dataBottom = 0 即世界底, maxY 同步转.
         int minY = levelWrapper.getMinHeight();
-        int dataBottom = Math.max(minY, 0); // 段底下限非负化: 取 0 而非 minY; y<0 区间不写段 (地下不可见, 与官方模板同构)
-        int maxY = levelWrapper.getMaxHeight();
+        int dataBottom = 0; // 相对语义: 0 = 世界底 (主世界即绝对 -64); 地下不可见不写段, 与官方模板同构
+        int maxY = levelWrapper.getMaxHeight() - minY; // 维度顶转相对 (主世界 320-(-64) = 384)
         int width = data.width;               // TD 数组宽 = X 向块数
         float[] elev = data.elevation;        // 海拔米 (行主序 idx = z*width + x)
         byte[] waterMask = data.waterMask;    // 1 = 水下
@@ -171,11 +172,11 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         for (int x = 0; x < cols; x++) {
             for (int z = 0; z < cols; z++) {
                 int idx = TdLodTranslator.sampleIndex(x, z, width);
-                int solidTop = clampY(HeightConverter.convertToMinecraftHeight((short) elev[idx]) + 1, dataBottom, maxY);
+                int solidTop = clampY(HeightConverter.convertToMinecraftHeight((short) elev[idx]) + 1 - minY, dataBottom, maxY); // -minY: 绝对 y 转相对 [长期记忆: 095]
                 int coverTop = solidTop;
                 // 水体列: 水面高于地形才成池 (waterMask 优先, 液面 <= 地形视为无水)
                 if (waterMask != null && waterMask[idx] != 0 && waterSurf != null) {
-                    int waterTop = clampY(HeightConverter.convertToMinecraftHeight((short) waterSurf[idx]) + 1, dataBottom, maxY);
+                    int waterTop = clampY(HeightConverter.convertToMinecraftHeight((short) waterSurf[idx]) + 1 - minY, dataBottom, maxY); // -minY: 绝对 y 转相对 [长期记忆: 095]
                     if (waterTop > solidTop) {
                         coverTop = waterTop;
                     }

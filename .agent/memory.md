@@ -422,3 +422,11 @@ tag: TDH项目, terrain-diffusion-horizons, 勘误
 2026-11-15 深夜 案II (4032 冲天石柱) 终局: max 实测通过 — 视觉问题全清, 500 chunks/sec, 87% 满速, ETA 30min (原版 RD5 + DH RD512)。新案两条: ① LOD 整体矮 ~64, 与 4032 案 bottom=0 契约自洽推导 = DH 存储层 y 语义为距世界底偏移 (推断级, 现象吻合), 修法 = 顶转相对 top-minY, 待改待验; ② 地表方块全石头, 裸 DH 无此问题, 疑 TD 管线只输出高度图、DataPoint 表面方块未正确喂 (待查证, 未定论)。max 决策: 仓库公开发布。
 tag: TDH项目, terrain-diffusion-horizons, 坐标语义, bug根因, DH
 <!-- END:095 -->
+<!-- ID:096 -->
+2026-11-15 深夜 TDH 建仓发布定案: 仓库已公开 https://github.com/LMaxRouterCN/terrain-diffusion-horizons, gh repo create --source=. --push 一次成功, 84af6a4 (gitignore+README WIP+.agent三件) 已推。决策: 公开/.agent三件入库/README双语WIP占位。注意: 项目原有 .gitignore/README (S2遗留) 被 create 覆盖, 旧件在 PokerAgent 专属回收站可 restore (create 前未 read 现场, 属未验现场复发)。框架目录 .agent_task_logs/ 与 .agent_trash/ (今晚生成) 已补入 .gitignore 并随新 commit 推送。后续主线: 矮64小修 (顶转相对 top-minY) + 地表全石查证。
+tag: TDH项目, terrain-diffusion-horizons, gh-cli, 发布
+<!-- END:096 -->
+<!-- ID:097 -->
+2026-11-15 PokerAgent replace 指令格式坑 (实证): 一条 replace 只接受恰好两个 code 块 (旧文本/新文本); 一次发 3 对 6 块 → 整条拒收 (回执报错: 只支持两个 code 代码块, 收到多个), 文件零改动 (原子性良好, 无半应用; 事后 git diff 仅 .agent 三件 M 印证)。多处替换 = 拆成多条独立 cmd, 每条恰好一对。与 exec 通道坑 (093) 同族: 指令格式约束以回执报错为准, 不猜不赌。
+tag: PokerAgent, 坑, 指令格式, 技巧
+<!-- END:097 -->
