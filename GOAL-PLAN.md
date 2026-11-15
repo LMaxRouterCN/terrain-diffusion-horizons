@@ -284,3 +284,79 @@ widthInColumns 参数保留 (dl>0 时列宽 2^dl, 未来扩展); 建议同时在
   全部零副作用恢复, 教训入 memory 099/100。
 - .gitignore 工作区损毁 (注释丢失/条目丢失/粘连; 非本会话所改, 疑框架手笔), 未 commit 未恢复, 待 max 定夺;
   副作用: libs/ 与 build-last.log 脱离忽略名单 (status 挂未跟踪)。
+## 2026-11-16 凌晨 · 案②α 表面审计全案 (侦查关门, 8 项待 max 拍板, 未动一行)
+
+### W 水判定双嫌疑 (必修)
+- 嫌疑一 (边缘水): waterMask 值 1-7 是抗锯齿格, TD chunk 侧对 <8 的水格跳过不落地,
+  本模组现码 (waterMask[idx] != 0) 照收 → LOD 河道边缘比 chunk 宽一圈
+- 嫌疑二 (幽灵水): waterSurf 为 NaN 时 (short)NaN = 0 → convertToMinecraftHeight(0) = 63,
+  地形顶 < 63 的列凭空多出一段水到海平面, 高发河道边缘带
+- 修法 (一行): fluvial 判定改 (waterMask[idx] & 0xFF) >= 8 && Float.isFinite(waterSurf[idx])
+
+### O 干海床 (定案, 建议必修)
+- 根因: BiomeClassifier 源码 isOcean = elevation < 0f + 注释明文海洋 cell 的 elevation
+  是负米海床深度 (deep_* 门限 < -250) → Generator 负值走压缩曲线 (-250m → y49),
+  上叠空气 → LOD 海洋 = 渲染 gravel/sand 表面的巨型干坑; Generator 全文 318 行零海平面处理
+- y63 海平面三路实锤: HeightConverter / ScaledAltitude / ReefSpires / SeaStack 四常量全 63;
+  FarLookupHeightMixin 撞水返回 max(surface, 63) 行为证明; 0m ↔ y63 恒等锚点 (任意 scale 不变,
+  负海拔压缩曲线最小落 y62 → 海洋列水段恒 >= 1 格, 无零厚度边角)
+- 修法: oceanCol = elev[idx] < 0f → 水段 [海床, seaTop]; seaTop = convert(0) - minY 循环外常量;
+  与 fluvial 互斥 (applyRiverBiomesFromWindow 对 ocean cell continue), 防御取 coverTop 最大;
+  frozen_ocean 冰盖走现有 iceCover 免费生效
+- 遗留矛盾: max 实测未报干海床 (测试区无海 or 未到海边, 信息在 max 手里)
+
+### A1 river 表行 (必修)
+- river / frozen_river 表行 sand → grass_block (vanilla 河群系河岸是草, 河床归 C 或水下字段)
+
+### A2 注释纠错 (必修)
+- 表 L29: underwater 字段 "河床/海床" 注释失真 (当前仅 fluvial 水列生效; O 批后海床才真走此字段)
+- 表 L55: old_growth podzol 注释错 (podzol 属 feature 层表述需修)
+- 表 L110: 河流段注释错
+- Generator 侧 "1=水下" 注释同步修
+
+### B1/B2/B3 (拍板项)
+- B1: snowy_plains / snowy_taiga 保 snow_block (建议保)
+- B2: snowy_beach → sand (倾向改)
+- B3: old_growth → podzol (倾向改)
+
+### C 河床分档 (建议做, ~5 行)
+- fluvial 水列底段: strength < 72 → sand (弱水经验配比 沙 62.5% 砾 37.5%),
+  >= 72 → gravel (强水 砾 85.2% clay 14.8%); strength = (waterMask[idx] & 0xFF) 与 W 共用;
+  需 resolveWrappers 加 gravel/sand 两 wrapper (per-column, 不进 styleCache)
+
+### 三耦合 (拍板联动)
+- 表 L29 underwater 注释 ↔ O: O 批 = 注释天然对, 不批 = 必改
+- river.underwater 字段 ↔ C: C 批 = 死字段 (注释即可), 不批 = 应改 gravel
+- 对称性: O 杀 ocean.surface (海洋列全水列), C 杀 river.underwater, 落地后表语义干净:
+  surface 管旱地 / underwater 管海床 / fluvial 河床归强度; 底段优先级 fluvial > ocean > surface
+
+### 落点行号 (已锁定, 拍板后纯机械执行)
+- 表 TdSurfaceBlockMap (152 行): L29 / L55-57 / L72-77 / L78 / L110-112
+- Generator TdDhWorldGenerator (318 行): L189-235 区水判定流 + resolveWrappers
+
+### 8 项决策面板 (待 max 回字母组合)
+W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / C 建议做 / O 建议必修
+回复后执行: 改 → build 三判据 → commit 前验 diff → 部署 MD5 双验 → javap → push
+
+### 其他遗留
+- chunk 强制薄流层 LOD 缺失 = 已知损失, 不追
+- .gitignore 工作区损毁 (前轮遗留, 待 max 定夺)
+## 2026-11-16 早晨 · 案②α 审计执行落地 (8 项全批, 已部署 TEST 待重测)
+
+### 执行记录
+- max 拍板: W/O/A1/A2/C 执行 + B3 改 podzol + B1/B2 保 snow_block (B2 顶沙白雪归 snow precip 群系统一近似)
+- 表: river/frozen_river surface 改 grass_block (A1); old_growth 系改 podzol (B3); underwater 注释改海床语义 (A2); 雪盖/河流段注释纠错 (A2)
+- Generator: waterMask 0-255 强度语义 (>=8 有效, <8 边缘抗锯齿格) + Float.isFinite 双杀 (W); oceanCol = elev<0 填水段 [海床, seaTop] (O); 河床强度分档 弱水<72 沙62.5%/砾37.5%, 强水 砾85.2%/黏土14.8%, 空间散列键=世界块坐标 跨数据源稳定 (C); sand/gravel/clay 三 wrapper 懒取, per-column 不进 styleCache; close 三置空; 残留旧注释清理 (与新逻辑矛盾的两行)
+- 构建: BUILD SUCCESSFUL in 47s, EXIT 0, jar 18575B (旧 18090B, +485B)
+- commit 4d78783 (2 files, +52/-16)
+- 部署: TEST mods 同名覆盖; MD5 双端一致 3BA214EF8BE07BB9A59B5E1BB822EFD9; 回滚锚 D:\temp\tdh-pre-audit-923275a.bak (旧版 18090B)
+- javap 部署物直验: iand / Float.isFinite / fcmpg / imul x2 / sand+gravel+clay 字符串 / podzol x2 全中
+
+### 重测清单 (TEST 实例)
+- 前置: 新世界或删 saves 下世界 data 内 DistantHorizons.sqlite (旧 LOD 不带新表面)
+- 看点: 河道边缘不再宽一圈 / 无幽灵水 / 近海干海床消失变海面 / 河床沙砾黏土混合 / 河岸草色 / old_growth 系暗棕 podzol
+
+### 遗留
+- .gitignore 工作区损毁仍待 max 定夺 (未 commit)
+- mods 的 DH 2.3.2-b 是否升 3.3.3 对齐编译期 (memory 087) = max 待决策
+- chunk 强制薄流层 LOD 缺失 = 已知损失, 不追
