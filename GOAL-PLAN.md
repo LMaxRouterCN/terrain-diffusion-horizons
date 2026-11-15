@@ -220,6 +220,8 @@ widthInColumns 参数保留 (dl>0 时列宽 2^dl, 未来扩展); 建议同时在
 
 **根因 (实证)**: 生成器实体段 bottom 喂 levelWrapper.getMinHeight() = -64 (主世界); DH 存储层 y 为 12 位无符号, -64 回绕 = 4032 (-64 & 0xFFF; 孤儿值 4033 = -63 & 0xFFF 同律); bottom(4032) > top(64~82 原样入库) 几何倒挂 → 主渲染路径画 y70~4032 冲天石柱 (柱顶随地形起伏, 柱底钉 4032), 邻接数据加载路径抛 "Negative y size for the renderDataPoint" (14.6 万条/13min ≈ 10MB/min 刷屏, Y-:4032 占 99.996%)。旧会话同错 10.4 万条 = 元案独立 bug, 与坐标修复无关; 坐标修复使坏 bottom 从集中一片变遍地 = "更快"闭环。官方模板 (0,h)+(h,顶) 的 0 是承重契约 (存储 y 非负), 偏离踩雷。
 
-**修法 (本轮已应用)**: TdDhWorldGenerator.generateInternal: 新增 dataBottom = max(minY, 0) 作实体段底; solidTop/waterTop 钳位下界 minY → dataBottom; 顶保持绝对坐标 (实证正确)。钳位保证 bottom ≤ top 恒成立。y<0 区间不写段 (地下不可见, 与官方模板同构)。
+**修法 (已应用 bff0ce4; 2026-11-15 22:14 部署, javap 验尸真绿)**: TdDhWorldGenerator.generateInternal: 新增 dataBottom = max(minY, 0) 作实体段底; solidTop/waterTop 钳位下界 minY → dataBottom; 顶保持绝对坐标 (实证正确)。钳位保证 bottom ≤ top 恒成立。y<0 区间不写段 (地下不可见, 与官方模板同构)。
+
+**部署与验尸证据 (091/090 证据原则)**: 四件套配方构建 (TD_MIRROR=1 + GRADLE_USER_HOME=F:\MOVED\.gradle + JAVA_HOME=zulu-17 + TEMP/TMP=D:\temp) 20s BUILD SUCCESSFUL, 13KB jar 部署 TEST mods (mtime 2026-11-15 22:14:22); javap 直验部署物 (mods 里游戏实际加载那份, 非 build/libs): getMinHeight:()I → iconst_0 → invokestatic Math.max:(II)I → istore dataBottom, 反汇编存 D:\temp\tdh-javap.txt, 排除假绿 (080 前科)。构建链绕路两轮根因 = exec 环境缺四件套 + 通道假读数误导 (DNS 污染本身是真坑但非本案死因), 教训入 memory 093。
 
 **案 II 验证清单 (重测看点)**: (1) Negative y size 刷屏应归零 (2) 石柱应消失 (3) 地形高度正确 — 若整体下沉 64 = DH 语义实为相对 y → 顶转相对 (分支预案, memory 092) (4) 重复/错位/tile 复制粘贴感复查 (石柱 bug 曾主导视觉, 修后才能判) (5) 放大消失/闪现闪消若残留 = 独立案 (6) DH 生成速率维持回升。
