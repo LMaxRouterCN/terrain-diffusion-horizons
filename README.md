@@ -2,6 +2,8 @@
 
 [English](https://github.com/LMaxRouterCN/terrain-diffusion-horizons#terrain-diffusion-horizons-tdh-1)
 
+https://github.com/xandergos/terrain-diffusion-mc/issues/260
+
 给 Terrain Diffusion 用的 Distant Horizons 的 LOD 加速生成模组
 
 用 Terrain Diffusion 的 AI 地形模型为 Distant Horizons 提供 LOD 数据源。
