@@ -20,7 +20,7 @@ public class TerrainDiffusionHorizons {
     public static final Logger LOG = LoggerFactory.getLogger("TerrainDiffusionHorizons");
 
     public TerrainDiffusionHorizons() {
-        // [待验证-S2b] DH 2.3.2-b 的 modid, 暂按 distanthorizons 写
+        // [长期记忆: 080] DH modid = distanthorizons, 已随生成器注册实测验证; 旧记 2.3.2-b 为 jar 文件名误名(实体 3.3.3)
         boolean hasDh = ModList.get().isLoaded("distanthorizons");
         boolean hasTd = ModList.get().isLoaded("terrain_diffusion_mc");
         LOG.info("壳启动: Distant Horizons={} / Terrain Diffusion={}", hasDh, hasTd);

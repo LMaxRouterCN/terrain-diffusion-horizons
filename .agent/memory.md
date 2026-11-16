@@ -323,6 +323,7 @@ tag: DH加速, DistantHorizons, td情报, terrain-diffusion-mc
 5) TD fml_mod_id=terrain_diffusion_mc(vdir gradle.properties实证), DH modid=distanthorizons(待S2b运行时实证).
 6) 遗留: LICENSE 80B占位需补MPL-2.0全文.
 旧标签 terrain-diffusion-mc 指 TD fork 仓库; TDH 项目标签从此条起.
+[2026-11-17 勘误] 3) dh_jar 现为 libs/DistantHorizons-3.3.3-1.20.1-forge-fabric.jar (编译期实体恒为3.3.3, 见080/087). 5) DH modid=distanthorizons 已随生成器注册实测验证. 6) 已销: LICENSE 现为 MPL-2.0 全文 16726B, 已入库(实测非占位).
 tag: TDH项目, terrain-diffusion-horizons, 构建配方, S2a
 <!-- END:072 -->
 <!-- ID:073 -->
@@ -382,8 +383,8 @@ javap 字节码排雷配方 (2026-11-15 TDH 零生成案实证): ①javap -c 不
 tag: javap, 技巧, 坑, 字节码
 <!-- END:086 -->
 <!-- ID:087 -->
-DH LOD 落盘与版本环境实证 (2026-11-15, TEST 1.20.1-Forge_47.4.10 实例): ①DH 2.3.2-b 的 LOD 存 saves\<世界名>\data\DistantHorizons.sqlite 单文件, 不是 data\DistantHorizons\ 目录; 判世界有无 LOD 看该 sqlite 存在+mtime, 世界104实证有(01:43+05:17 两会话写入) ②版本错配: 编译期 dh_jar=libs/DistantHorizons-3.3.3(GOAL-PLAN L11 目标环境也是 3.3.3), 运行期 mods=地平线dh DistantHorizons-2.3.2-b; 枚举面 EDhApiDistantGeneratorMode 四常量(PRE_EXISTING_ONLY/SURFACE/FEATURES/INTERNAL_SERVER) 双版本 javap 实证同构, 该面兼容; 其余 API 面靠 05:12 旧 jar 跑通佐证。mods 是否升 3.3.3 对齐是 max 待决策项。
-tag: DistantHorizons, 测试环境, 坑, TDH项目
+[2026-11-17 覆盖, DH版本议题终结] max 确认 DH 从来都是 3.3.3——"2.3.2-b"印象源于 jar 文件名误名(080 于11-15勘误: TEST实例与项目libs的DH jar同hash, 内容实为3.3.3, mods.toml+fabric.mod.json双证, 当日已正名), 编译期=运行期=3.3.3, "mods是否升3.3.3对齐编译期"待决策项作废销案. 保留有效情报: ①DH 的 LOD 落盘 = saves\<世界名>\data\DistantHorizons.sqlite 单文件(不是 data\DistantHorizons\ 目录), 判世界有无 LOD 看该文件存在+mtime, 世界104实证. ②TEST 实例路径见 041. ③EDhApiDistantGeneratorMode 四常量双版本 javap 同构属历史勘误遗留, 现已无版本差异问题.
+tag: DistantHorizons, 测试环境, 坑, TDH项目, 勘误
 <!-- END:087 -->
 <!-- ID:088 -->
 DH generateLod 坐标语义定案 (2026-11-15 数据正确性案根因, javap+双会话实证): (1) posX/posZ 单位 = 数据源边长(块) = 2^(apiDl+6), dl0 即 64 块, 不是块坐标; 调用链: WorldGenerationQueue 用 DhSectionPos.getX/getZ (核心dl = apiDl+6, 段坐标 1 单位 = 2^核心dl 块) (2) FullDataSourceV2 恒 64x64 数据列, dl0 列宽 1 块, 数据源总边长 64 块; DhWorldGenerator.generateLod 开头 powerOfTwo(apiDl+6) 佐证 (3) 实证法: 首调日志 chunkMin/pos 比值恒 4, chunk 16 块 x4 = 64, 双会话复现 (4) TDH 旧 translator 双重错: pos 未乘 64 (全查原点附近) + span 多乘 widthInColumns (4096 而非 64) → 16 数据源同查一区域各取左上 64x64 角落平铺 = 地形重复/网格错位/冲天石柱/精细度坏的单一根因 (5) 修法: size = columnWidthBlocks(dl); bounds = {posZ*size, posX*size, +size, +size}; widthInColumns 留作 dl>0 扩展。"放大消失/闪现闪消"未归因, 修坐标后看残留。
@@ -481,8 +482,9 @@ tag: TDH项目，坑，指令格式
 tag: TDH项目，坑，指令格式，PokerAgent
 <!-- END:108 -->
 <!-- ID:109 -->
-2026-11-16 TDH 案②α LOD 表面审计八项全落地 (代码 commit 4d78783 + docs commit 24f0d7b 已 push): W 水判定双杀 (waterMask 0-255 强度语义, >=8 有效, isFinite 防幽灵水); O 干海床修复 (ocean = elev<0 列填水段 [海床, seaTop=y63], 冻洋冰盖免费生效); C 河床强度分档 (弱水<72: 沙62.5%/砾37.5%, 强水: 砾85.2%/黏土14.8%, 散列键=世界块坐标跨数据源稳定); A1 河群系表面 grass_block; B3 old_growth 系 podzol; B1/B2 雪盖系定案 snow_block. jar 18575B 已部署 TEST mods (MD5 3BA214EF8BE07BB9A59B5E1BB822EFD9 双验一致), 回滚锚 D:\temp\tdh-pre-audit-923275a.bak (旧版 18090B). 重测前置: 新世界或删 saves 下世界 data 内 DistantHorizons.sqlite (旧 LOD 不带新表面); 看点: 河道边缘不再宽一圈 / 无幽灵水 / 近海干海床变海面 / 河床沙砾黏土混合 / 河岸草色 / old_growth 系暗棕 podzol. 遗留三项待 max: .gitignore 工作区损毁 / .agent 三文件 / DH 2.3.2-b 是否升 3.3.3 对齐编译期
-tag: TDH项目，terrain-diffusion-horizons，表面规则，重测清单
+2026-11-16 TDH 案②α LOD 表面审计八项全落地 (代码 commit 4d78783 + docs commit 24f0d7b 已 push): W 水判定双杀 (waterMask 0-255 强度语义, >=8 有效, isFinite 防幽灵水); O 干海床修复 (ocean = elev<0 列填水段 [海床, seaTop=y63], 冻洋冰盖免费生效); C 河床强度分档 (弱水<72: 沙62.5%/砾37.5%, 强水: 砾85.2%/黏土14.8%, 散列键=世界块坐标跨数据源稳定); A1 河群系表面 grass_block; B3 old_growth 系 podzol; B1/B2 雪盖系定案 snow_block. jar 18575B 已部署 TEST mods (MD5 3BA214EF8BE07BB9A59B5E1BB822EFD9 双验一致), 回滚锚 D:\temp\tdh-pre-audit-923275a.bak (旧版 18090B). 重测前置: 新世界或删 saves 下世界 data 内 DistantHorizons.sqlite (旧 LOD 不带新表面); 看点: 河道边缘不再宽一圈 / 无幽灵水 / 近海干海床变海面 / 河床沙砾黏土混合 / 河岸草色 / old_growth 系暗棕 podzol.
+[2026-11-17 更新] 遗留三项消解: .gitignore 已由 max 修复(15行, git commit 解锁); DH 2.3.2-b 升级议题作废(087销案, 从来都是3.3.3). 仅剩 .agent 三文件处置, 且它是 commit 硬阻塞: .gitignore 忽略了 .agent_task_logs/.agent_temp_files/.agent_trash 但没有 .agent/ 本体, 旧框架存档(memory.md/remember.md等)会被 git 追踪入库, commit 前必须定夺(加 ignore / 删除 / 有意入库).
+tag: TDH项目, terrain-diffusion-horizons, 表面规则, 重测清单
 <!-- END:109 -->
 <!-- ID:110 -->
 2026-11-16 TDH 河岸方块准确度定案 (案②α 后续): max 实地验证河岸非全草 (散布沙/砾), 这些块跨群系边界, 属 vanilla surface rules 噪声条件分支 + feature 层产物, 碎片化信息 cell 采样天然拿不到, 定案不追. LOD 方块选择层在此约束下已到头 (一个数据点 = 表面方块 + 水段). 潜在改进仅剩一项且未排队: C 方案散列键 (gx, gz) 右移 6 位可模拟 vanilla 片状河床 (整段同材质) 代替现花斑模式, 零性能成本, 观感结构对齐; 待重测后看花斑是否碍眼再议. 相关已知: 河岸 tint 色带嫌疑 (river biome grass tint 微差) 和几何阶梯是另两本账, 不归方块选择.
@@ -492,3 +494,17 @@ tag: TDH项目，terrain-diffusion-horizons，表面规则，设计哲学
 2026-11-16 TDH LOD 生成性能基线 (案②α 部署后首测): TEST 实例, 稳态约 700 区块/秒, 峰值约 1500 区块/秒. 机器: Ryzen 5 5600X / 32G 3200MHz. 参数组合: TD 侧缩放等级 6 (terrain-diffusion 数据源密度参数) + DH 侧质量 4 / 负载 4 (渲染 LOD 档). 注意: TD 缩放等级与 DH detail 是两套独立系统, 不可混用 (本人曾混淆, max 纠正); DH 质量 4/负载 4 对应的实际 detail 数值未确认, 需要时查 DH 配置而非推断. 无审计前基线, 此数字仅证明"无性能灾难", 不构成 A/B 证据; 审计改动为 per-column 常数运算 (散列+分支+懒 wrapper), 理论零损失. 未来改动以此基线对比.
 tag: TDH项目，terrain-diffusion-horizons，性能基线
 <!-- END:111 -->
+<!-- ID:112 -->
+2026-11-17 TDH README.md 0.1.0 正式版落盘完成(双语文档, 中文145行+分隔3行+英文146行=294行, 围栏终验: fence3=2/fenceLong=2/L69+L217双开栏, 已修复合并, 最终293行). 本轮实测四坑: (1)create载荷中写"反斜杠+三反引号+json"的转义围栏, 落盘变成孤立反斜杠行+下一行裸json词, 且多行载荷的行首缩进被剥(JSON内容缩进全丢). 对策: 围栏/反引号一律用[char]96加-join构造, 配合System.IO.File的ReadAllLines/WriteAllLines写盘(默认UTF8无BOM, 兼避PS5.1 GetContent的GBK误读). (2)exec脚本内(含代码注释)严禁裸写三联反引号: code块内会被当渲染围栏吞掉, 脚本后半段掉出块外被解析层吃. (3)PowerShell的char乘int未定义(InvalidOperation), 但默认continue后续照跑=半死脚本静默写盘, 靠回执里的newcount/after段才识破. 围栏构造用-join($bt,$bt,$bt). (4)create遇回收站同名历史备份会拒绝覆盖, 而move指令又被禁止触碰.agent_trash目录: 对策是先把工作区旧文件move到工作区外(D:\temp)腾位再create, 三份全保留. 旧README(1062B)备份: D:\temp\tdh-readme-1062b.bak.
+后记v4(2026-11-17深夜): exec载荷对"数组字面量内的反引号表达式"扰动实证两形态: ①断行死法: eng数组中 $bt加号拼接语言标记 的元素落盘断成两行(三反引号行+孤立json行, count+1); ②合并死法: 探针数组三元素(事故形状/-join/内插)到达时被压成单元素空格连接串(len23=三乘七加两空格), 换行与逗号全失. 同数组三构造法未获分离验证, -join/内插在数组字面量内的安全性未知. 例外反差(样本2): if条件中括号包裹的同形表达式/内容行内联反引号/裸$bt闭栏行均存活. 唯一实证免疫法=盘上碎片拼接(读回相加, 载荷内零反引号零语言标记字面, 本轮修复实战成功). 铁律: (a)数组字面量内禁拼围栏行, 围栏行一律盘上拼接; (b)围栏写入后必须回读总行数对账+围栏行长度验证, 只数围栏行数无法区分一体与断裂; (c)探针设计教训: 欲分离验证多构造法须物理隔离(独立数组/独立写盘), 同数组兄弟元素会被一起卷入扰动.
+tag: TDH项目，terrain-diffusion-horizons，坑，指令格式，PokerAgent，README
+<!-- END:112 -->
+<!-- ID:113 -->
+2026-11-17 max的voxy弃选理由(原以README手注口述形式出现): voxy现有1.20.1版本太不稳定; ARR许可证麻烦; 给voxy做加速相当于要写1.20.1版自生成区块的voxy, 即使不全写也要吃透那些fork, 工作量太大; 1.20.1之后的版本大概率也不会转向voxy. 含义: TDH只桥接DH是长期定位.
+[同日更新] 处置落定: max指令"我手写那些格式规整一下,翻译一版英文版放底下", 手注已规整为正式段落置入简介后(中英双语, 论点全量保留, "不稳定"标注个人体验), 上轮"改写为公开FAQ"选项以此形式落地, README处置完结.
+tag: TDH项目，terrain-diffusion-horizons，voxy，选型，README
+<!-- END:113 -->
+<!-- ID:114 -->
+2026-11-17 README行数异常案: 终验144行后, 本轮替换前发现146, 多出L9-10两行max口吻voxy手注; 我方窗口零写入(替换为ReadAllLines单元素赋值, 数学上不减行), 围栏锚点68/78→70/80精确+2, 全文排查无其他非我稿内容, 证据指向max在终验后直接手改了文件(读README时顺手批注). 教训: (1)我落盘后的验证结论会被用户并发手改作废, 任何写操作前必须重读现场取实时锚点, 不能拿旧回执当现状; (2)行数/内容异常先用内容锚点定位插入点再排查自身, 未排除外部编辑前禁止"修复"——本轮若信旧count按144去对齐, 会误删他的两行; (3)带冒号前缀的口述体手注是用户主观创作, 发现后只问不改.
+tag: 坑，PokerAgent，协作模式，README
+<!-- END:114 -->

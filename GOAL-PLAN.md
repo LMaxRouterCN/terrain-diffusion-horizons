@@ -357,6 +357,10 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 看点: 河道边缘不再宽一圈 / 无幽灵水 / 近海干海床消失变海面 / 河床沙砾黏土混合 / 河岸草色 / old_growth 系暗棕 podzol
 
 ### 遗留
-- .gitignore 工作区损毁仍待 max 定夺 (未 commit)
-- mods 的 DH 2.3.2-b 是否升 3.3.3 对齐编译期 (memory 087) = max 待决策
+- .gitignore 已由 max 修复 (2026-11-17, 15 行标准列表)
+- DH 版本议题销案: 实体从来都是 3.3.3, "2.3.2-b" 是 mods 内 jar 文件名误名 (memory 080/087)
 - chunk 强制薄流层 LOD 缺失 = 已知损失, 不追
+- mods 内 DH jar 已正名 DistantHorizons-3.3.3-1.20.1-forge-fabric.jar (去中文前缀, max 授权, 2026-11-17)
+- .agent 三文件定夺: 入库, .gitignore 不加 .agent/ 条目 (max, 2026-11-17)
+- 源码 L23 注释已更新: modid 实测验证 + 2.3.2-b 勘误注记
+- README 双语正式版: max 过目通过, 两处手改用词已同步英文
