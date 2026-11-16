@@ -430,3 +430,65 @@ tag: TDH项目, terrain-diffusion-horizons, gh-cli, 发布
 2026-11-15 PokerAgent replace 指令格式坑 (实证): 一条 replace 只接受恰好两个 code 块 (旧文本/新文本); 一次发 3 对 6 块 → 整条拒收 (回执报错: 只支持两个 code 代码块, 收到多个), 文件零改动 (原子性良好, 无半应用; 事后 git diff 仅 .agent 三件 M 印证)。多处替换 = 拆成多条独立 cmd, 每条恰好一对。与 exec 通道坑 (093) 同族: 指令格式约束以回执报错为准, 不猜不赌。
 tag: PokerAgent, 坑, 指令格式, 技巧
 <!-- END:097 -->
+<!-- ID:098 -->
+2026-11-16 PokerAgent replace 精确匹配坑新变体 (疑通道损毁, 未定案): 目标行确在文件中 (read 回执逐字确认过), replace 仍报"未找到匹配的文本块", 相似度仅 34.96%, 且错误回显把旧文本转小写 (DH→dh, TD→td) — 嫌疑传输中换行丢失或变体字符致整块畸变 (与 093③ 同族, 发生在 replace 参数而非 exec)。规避法 (实证有效): 中文长块精确替换不可靠时, 改 create 写补丁文件 + PowerShell [System.IO.File]::ReadAllText/WriteAllText (UTF8Encoding false 无 BOM) 拼接, 内容不经通道比对; 铁律: replace 失败回执必须当轮处理 (重发或绕行), 禁止带着失败继续 commit — 本案空 commit 3ae4dae 事故的根因。
+tag: PokerAgent, 坑, 指令格式, 技巧
+<!-- END:098 -->
+<!-- ID:099 -->
+replace 指令内容匹配模式格式坑 (2026-11-16, TDH案②轮实测): 旧/新两个代码块必须各自用完整的一对 code 标签闭合 (开标签+闭标签), 第一个代码块的结尾不能直接接第二个块的开标签, 否则整条指令在解析层失败 (报错: code 块无配对闭合, "本指令及其后所有内容均未执行"), 但同轮其他单块指令 (create/insert) 不受影响. 案例: 同轮十余条双块 replace 因该错误全灭, 一条不剩. 重发前逐条检查每对标签的闭合. 另: 一次发大量指令时, 单条解析失败不阻止后续指令执行 (逐条报错).
+tag: 指令格式，坑，replace
+<!-- END:099 -->
+<!-- ID:100 -->
+PokerAgent 标签格式双坑 (2026-11-16, TDH案②部署轮两连实测):
+坑A 孤立闭合标签毒化: 在两个exec代码块之间多打一个孤立的闭合标签, 后续整个exec块被解析器拆碎, [cmd]exec/[code]/逐行脚本内容逐行被当"指令名"报"未知指令", 整块未执行。识别: 回执逐行报未知指令+零正常输出=死于解析层。误诊陷阱: 同轮其他块照常执行, javap验尸若读的是该块本应更新的目标, 旧数据产生"修复失败"假象 (本案以偏移逐字一致+新类MISSING双证据定案是部署未发生)。铁律: 报"未知指令"的行=未执行, 补发以文件系统实际状态(MD5/mtime)为准, 不信回执推断。
+坑B 内容嵌标签截断: 在 code 块的内容文字里写中文方括号标签本体 (未转义/未换英文括号), 解析器在内容中遇标签即提前闭块, 写入被截断 (memory 100 初版+remember 初版双双截断于标签处, 本条为覆写补全; 遗留闭合标签再报"未知指令")。铁律: 写关于标签的文字必须用英文方括号 [code] 或转义。
+tag: 指令格式，坑，PokerAgent
+<!-- END:100 -->
+<!-- ID:101 -->
+2026-11-16 TDH 案①+案②α 双修部署 (commit 923275a+07322c4, push 013e3ed..07322c4):
+案① LOD 高 1 格根因定案: TD HeightConverter.convertToMinecraftHeight 语义 = 第一个空气 y (density 函数数学/FeaturePlacer 姿势/mixin 注释/DH 半开区间/实测高 1 格, 五证合一), 旧码 +1 属双重补偿; 修法 = solidTop/waterTop 删 +1; javap 部署物实证 convert 后直接 iload+isub 无 iconst_1 iadd (偏移 450/506)。
+案②α 群系驱动表面: TdSurfaceBlockMap 65 群系剪枝表 (主导表面/水下顶部/冰盖) + TdConfig useBiomeSurface/surfaceBlockOverrides 两新键 + Generator ColumnStyle/resolveStyle (ConcurrentHashMap 缓存); withBiomes=true 内存 ~520MB (false ~150MB TEST 实测); 群系 wrapper 进 data point = DH 远距 biome tint。
+部署: TEST mods jar 18090B MD5 70FDE76E5E55B93CE41CC79655308900, 回滚锚 D:\temp\tdh-pre-alpha.bak (F531D151... = 08606e2 版血统)。编译期与部署期 TD fork jar 同 MD5 (5314B5B7...) → keyForIndex API 面编译=运行。
+坑: TEST 已有旧三键 config json, 新键用字段默认值生效但文件不显示 (load 成功不重播种); 编辑需手加或删 json 重播种。重测: 必须新世界或删 saves\<世界>\data\DistantHorizons.sqlite。遗留待 max: .gitignore 工作区损毁 (疑框架手笔, 未commit未恢复) + libs//build-last.log 未跟踪 + .agent 三文件。
+tag: TDH项目，terrain-diffusion-horizons，td情报，bug根因
+<!-- END:101 -->
+<!-- ID:102 -->
+2026-11-16 max纠正同源定义 (river沙带案引出): TDH的LOD表面方块"同源"基准 = TD实际chunk侧生成管线放置的方块(玩家肉眼比对的对象), 不是vanilla surface rule的抽象复刻. 我的TdSurfaceBlockMap javadoc声称"TD chunk表面=vanilla SurfaceSystem.buildSurface x TD BiomeSource"属未验证假设写成事实, fork全树无SurfaceSystem/buildSurface引用+存在SurfaceShell/SurfaceFeaturePlacer/SurfaceStamp自建管线文件名佐证TD不用vanilla表面系统. river行(表L111-112双sand)是首个可见证伪, 其余64行同源声称同步作废待重审. 教训: 机制性声称未经源码实证禁止写进注释/文档当依据. 正解方向: 从TD真实表面管线(SurfaceShell/SurfaceFeature系)导出群系→方块映射, 或直接调用TD侧接口.
+tag: TDH项目，勘误，bug根因
+<!-- END:102 -->
+<!-- ID:103 -->
+2026-11-16 TD chunk表面管线定案(LOD表面审计案): TD chunk表面=vanilla NoiseBasedChunkGenerator.buildSurface(vanilla surface rule × TerrainDiffusionBiomeSource) + 后置装饰. 证据: mixin清单无SurfaceSystem替换; BiomeSource.getNoiseBiome按方块粒度索引tile的biomeIndexes(宽=tileSize, 地表Y无关, fallback=plains); TerraBlenderSurfaceCompat包装settings.surfaceRule(). 后置管线: ChunkGeneratorMixin decorate钩子跑TerrainDiffusionRiverDecorator(河流专属装饰器, 材料未知待读) + SurfaceFeatureDecorator(30+装饰物FeaturePlacer); SnowAndFreezeFeatureMixin按地形模型温度加深雪层(最冷=雪块+层, chunk雪原真身=草+雪层非雪块). SurfaceShell=carver保护壳(拒表面附近air/fluid写入防凿穿)与材质无关. 勘误: TD biome map是per-block索引比vanilla quart细, "TD 30m/px粗粒度"说法错误. fork布局: 版本特定代码在versions\1.20.1\common\src, 顶层common只放跨版本码, 全树搜索须覆盖versions且排除\build\.
+tag: TDH项目，td情报，terrain-diffusion-mc
+<!-- END:103 -->
+<!-- ID:104 -->
+2026-11-16 TD RiverDecorator 材质真身(LOD表面审计案): TerrainDiffusionRiverDecorator(fork versions\1.20.1)在 buildSurface 后只处理水柱(挖床/填水/换河床材质/冻河盖冰), 干地列直接跳过不碰→河岸干地=vanilla default 产物=草, TDH 表 river 行 surface=sand 纯错. 河床材质 per-column 随机: strength<72 且 roll<96→sand, roll<38→clay, 其余→gravel; 砾石无处不在, 沙限弱水区(小溪), clay 少数(概率按 roll 均匀 0-255 假设, roll 实际范围未读). 冰面: patch<0.235→blue_ice, <0.365→packed_ice, 其余→ice(63.5%主导). 冻河判定=isFrozenRiver(biomeIndexes), 与 TDH frozen_river 冰盖同源. 坑: forge sources jar 只含 Forge 补丁类无 vanilla; vanilla 源码在 minecraft_user_repo 的 inject_src.jar; fork 多版本布局: LocalTerrainProvider 等跨版本核心在顶层 common, 版本特定在 versions\1.20.1.
+tag: td情报，terrain-diffusion-mc，TDH项目，勘误
+<!-- END:104 -->
+<!-- ID:105 -->
+2026-11-16 TDH LOD水面判定双嫌疑定案(LOD表面审计案收官侦查): ①waterMask=encodeWaterMask三参编码byte: strength=max(河道形状x(0.55+0.45x流量), 湖深/24)x255, 输出0或1-255, 1-7=子块抗锯齿边缘(chunk侧MIN_WATER_MASK=8跳过, TDH侧旧代码!=0照收=LOD河道多一圈边缘水) ②RiverTerrainData.waterSurface无水=NaN(decodeWaterSurface把Short.MIN_VALUE哨兵解回NaN), TDH旧代码(short)Float.NaN静默=0→convertToMinecraftHeight(0)=y63海平面→地形顶<y63的列凭空多一段连到海平面的水, 高发区=河道边缘带(mask小+surface常无值高度重叠)→幽灵水池。修法=waterCol判定为(waterMask[idx]&0xFF)>=8 && Float.isFinite(waterSurf[idx]), 一行修两嫌疑; C方案河床分档复用同一&0xFF值: <72→sand(实际弱水62.5%砾37.5%沙) >=72→gravel(强水85.2%砾14.8%clay零沙), roll=hash&255均匀已证。chunk侧还有强制单层薄流(液面略低于河床时), TDH侧waterTop>solidTop判定天然缺=已知损失不追。HeightConverter: meters>=0→y=meters/resolution+63(海平面63), 负→y=63-sqrt(|m|+10)+sqrt(10)-1。
+tag: TDH项目，bug根因，td情报，terrain-diffusion-mc
+<!-- END:105 -->
+<!-- ID:106 -->
+2026-11-16 max 架构指示 (TDH): ① 表面规则不许硬编码, 规则在游戏启动/世界加载时从游戏获取并生成 — 案②α 的 TdSurfaceBlockMap 65 群系手抄表 (923275a) 定性为设计债, 待运行时化替代; 技术方向 = 反射遍历 vanilla SurfaceRules 规则树 (NoiseGeneratorSettings.surfaceRule, datapack 可覆盖), 剪枝策略留代码/数据来自运行时; 内部类反射版本耦合, compileOnly 钉 1.20.1 已有先例 (WrapperFactory_forge); 类名与遍历可行性未实证, 动手前 javap。② feature 层 (雪片/地物/结构) 列入路线图要真做进 LOD, 现有近似方案一律标"临时待替代"。③ 由此 B2 定案: snowy_beach 保 snow_block 与 B1 统一 (snow precip 群系一律 snow_block 近似), 原倾向 sand 的理由(严格 surface rule)与 B1 处理构成双重标准, 已被 max 击毙; snowy_beach 顶部方块 sand 但白雪来自 SnowAndFreezeFeature (feature 层, 凭记忆未实证)。
+tag: TDH项目，terrain-diffusion-horizons，架构，表面规则，设计哲学
+<!-- END:106 -->
+<!-- ID:107 -->
+2026-11-16 TDH 审计执行轮事故: PokerAgent 无 write 指令 (后端拒绝并逐行报"未知指令", cmd 块内逐行被解析为独立指令, 零副作用). 写文件正确姿势: 小文件用 exec+PowerShell Set-Content (Get-Content -Raw 读模板 .Replace 后写, 全 ASCII 内容任何编码读安全); 大段新文件内容再查 @@help fast 找对应指令 (本轮已查, 指令名以 fast 列表为准, 此处不预写防再次猜错). 另: replace -l N-M 多行回执报"N处文本"=按行计数非按块计数. exec 用法: 单代码块=同进程共享变量 (有依赖的多步必须单块), 多代码块=独立进程互不依赖.
+tag: TDH项目，坑，指令格式
+<!-- END:107 -->
+<!-- ID:108 -->
+2026-11-16 PokerAgent 格式事故合集 (108, 覆写修复): ①上游事故: 在 cmd 块之间写解释文字时误把 code 结束标签的中文括号字符原样写出, 被后端解析为未知指令 (零副作用). ②本轮新教训: 在 memory 指令的 code 块内容里引用事故原文时再次写出该标签字符, code 块在引用处提前终止 -> 本条记忆内容被截断 + 消息里真正的结束标签变成游离未知指令. 结论: 消息任何位置 (含 code 块内部) 都禁止出现中文方括号形式的标签原文; 需要引用时用反斜杠转义括号 (指南支持) 或用英文措辞描述. ③同块多条命令与 exec 多代码块均正常, 事故仅限游离裸标签.
+tag: TDH项目，坑，指令格式，PokerAgent
+<!-- END:108 -->
+<!-- ID:109 -->
+2026-11-16 TDH 案②α LOD 表面审计八项全落地 (代码 commit 4d78783 + docs commit 24f0d7b 已 push): W 水判定双杀 (waterMask 0-255 强度语义, >=8 有效, isFinite 防幽灵水); O 干海床修复 (ocean = elev<0 列填水段 [海床, seaTop=y63], 冻洋冰盖免费生效); C 河床强度分档 (弱水<72: 沙62.5%/砾37.5%, 强水: 砾85.2%/黏土14.8%, 散列键=世界块坐标跨数据源稳定); A1 河群系表面 grass_block; B3 old_growth 系 podzol; B1/B2 雪盖系定案 snow_block. jar 18575B 已部署 TEST mods (MD5 3BA214EF8BE07BB9A59B5E1BB822EFD9 双验一致), 回滚锚 D:\temp\tdh-pre-audit-923275a.bak (旧版 18090B). 重测前置: 新世界或删 saves 下世界 data 内 DistantHorizons.sqlite (旧 LOD 不带新表面); 看点: 河道边缘不再宽一圈 / 无幽灵水 / 近海干海床变海面 / 河床沙砾黏土混合 / 河岸草色 / old_growth 系暗棕 podzol. 遗留三项待 max: .gitignore 工作区损毁 / .agent 三文件 / DH 2.3.2-b 是否升 3.3.3 对齐编译期
+tag: TDH项目，terrain-diffusion-horizons，表面规则，重测清单
+<!-- END:109 -->
+<!-- ID:110 -->
+2026-11-16 TDH 河岸方块准确度定案 (案②α 后续): max 实地验证河岸非全草 (散布沙/砾), 这些块跨群系边界, 属 vanilla surface rules 噪声条件分支 + feature 层产物, 碎片化信息 cell 采样天然拿不到, 定案不追. LOD 方块选择层在此约束下已到头 (一个数据点 = 表面方块 + 水段). 潜在改进仅剩一项且未排队: C 方案散列键 (gx, gz) 右移 6 位可模拟 vanilla 片状河床 (整段同材质) 代替现花斑模式, 零性能成本, 观感结构对齐; 待重测后看花斑是否碍眼再议. 相关已知: 河岸 tint 色带嫌疑 (river biome grass tint 微差) 和几何阶梯是另两本账, 不归方块选择.
+tag: TDH项目，terrain-diffusion-horizons，表面规则，设计哲学
+<!-- END:110 -->
+<!-- ID:111 -->
+2026-11-16 TDH LOD 生成性能基线 (案②α 部署后首测): TEST 实例, 稳态约 700 区块/秒, 峰值约 1500 区块/秒. 机器: Ryzen 5 5600X / 32G 3200MHz. 参数组合: TD 侧缩放等级 6 (terrain-diffusion 数据源密度参数) + DH 侧质量 4 / 负载 4 (渲染 LOD 档). 注意: TD 缩放等级与 DH detail 是两套独立系统, 不可混用 (本人曾混淆, max 纠正); DH 质量 4/负载 4 对应的实际 detail 数值未确认, 需要时查 DH 配置而非推断. 无审计前基线, 此数字仅证明"无性能灾难", 不构成 A/B 证据; 审计改动为 per-column 常数运算 (散列+分支+懒 wrapper), 理论零损失. 未来改动以此基线对比.
+tag: TDH项目，terrain-diffusion-horizons，性能基线
+<!-- END:111 -->

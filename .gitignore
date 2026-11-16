@@ -1,11 +1,9 @@
-# Gradle 构建产物 / Gradle build outputs
+.agent_task_logs/
+.agent_temp_files/
+.agent_trash/
 .gradle/
 build/
-
-# 运行目录 / game run directory
 run/
-
-# IDE
 .idea/
 *.iml
 .vscode/
@@ -13,11 +11,5 @@ run/
 .classpath
 .project
 bin/
-
-# 本地依赖与构建日志 / local dependency jars and build logs
 libs/
 build-last.log
-
-# PokerAgent 框架目录 / agent framework dirs
-.agent_task_logs/
-.agent_trash/
