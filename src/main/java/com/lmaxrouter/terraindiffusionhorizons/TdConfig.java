@@ -1,51 +1,65 @@
 package com.lmaxrouter.terraindiffusionhorizons;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.electronwill.nightconfig.core.Config;
+import com.electronwill.nightconfig.core.UnmodifiableConfig;
+import com.electronwill.nightconfig.toml.TomlFormat;
 import net.minecraftforge.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * TDH 配置 (案②α 五键版).
+ * TDH 配置 (TOML 版; max 2026-11-18 指令: JSON -> TOML 带中文注释,
+ * 位置 config/terrain-diffusion-mc/ 与主模组同文件夹).
  *
- * <p>播种式落盘: 首次运行在 config/ 写出默认 JSON, 之后读用户手改的文件;
- * 文件损坏时回退默认值且不覆盖坏文件 (日志警告, 便于人工排查).</p>
+ * <p>播种式落盘: 首次运行 (文件不存在) 写出带注释的默认模板; 之后读用户手改的文件.
+ * 文件损坏时回退默认值且不覆盖坏文件 (日志警告, 便于人工排查).
+ * 运行期零自动写盘 — 落盘只发生在播种时.</p>
+ *
+ * <p>解析: night-config (Forge 运行时自带; 编译期 compileOnly 借道 mavenCentral).
+ * 取值只走 javap 实证过的 getOrElse(List 路径) 形式, 单串 dotted 路径行为不依赖.</p>
  */
 public final class TdConfig {
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-
-    /** 配置文件: config/terraindiffusionhorizons.json */
+    /** 配置目录: 与主模组 (terrain-diffusion-mc) 同住. */
+    private static final Path CONFIG_DIR =
+            FMLPaths.CONFIGDIR.get().resolve("terrain-diffusion-mc");
+    /** 配置文件. */
     private static final Path CONFIG_PATH =
+            CONFIG_DIR.resolve("terrain-diffusion-horizons.toml");
+    /** 旧版 JSON 配置 (Gson 时代), 检出提示手动迁移; 不自动迁移不删 (处置归 max). */
+    private static final Path LEGACY_JSON_PATH =
             FMLPaths.CONFIGDIR.get().resolve("terraindiffusionhorizons.json");
 
-    // ---- 五个配置键 (案②α: 表面方块群系驱动) ----
+    // ---- 配置字段 (与 TOML 键一一对应; 默认值 = 字段初始化值) ----
 
-    /** 总开关: false = 不注册生成器, DH 走原生路径 (改动需重进世界生效). */
+    /** [general] 总开关: false = 不注册生成器, DH 走原生路径 (改动需重进世界生效). */
     public boolean enabled = true;
 
-    /** 表面方块 fallback (原版 ID): useBiomeSurface=false 或群系解析失败时使用 (S2b 旧主路径降级). */
+    /** [terrain] 表面方块 fallback (原版 ID): useBiomeSurface=false 或群系解析失败时使用 (纯几何模式旧路径). */
     public String surfaceBlock = "minecraft:stone";
 
-    /** 填充群系 fallback (原版 ID): 纯几何模式 (useBiomeSurface=false) 下 data point 携带的群系. */
+    /** [terrain] 填充群系 fallback (原版 ID): 纯几何模式 (useBiomeSurface=false) 下 data point 携带的群系. */
     public String fillerBiome = "minecraft:plains";
 
-    /** 案②α: true = TD 群系驱动表面方块 (withBiomes 查询 + 表映射, 与 chunk 生成同源); false = 纯几何占位 (内存 ~150MB). */
+    /** [terrain] true = TD 群系驱动表面方块 (与 chunk 生成同源); false = 纯几何占位 (内存 ~150MB). */
     public boolean useBiomeSurface = true;
 
-    /** 案②α: 群系 key -> 方块 ID 稀疏覆盖, 仅覆地表字段 (水列方块与冰盖不受影响; 空 = 全用内置表). */
+    /** [terrain.surfaceBlockOverrides] 群系 key -> 方块 ID 稀疏覆盖, 仅覆地表字段 (水列方块与冰盖不受影响; 空 = 全用内置表). */
     public Map<String, String> surfaceBlockOverrides = new LinkedHashMap<>();
+
+    /** [vegetation] L1 植被统计近似开关: 群系密度查表 + 树冠段叠加 (远景观感; 临时近似, L4 由真实数据替代). */
+    public boolean vegetationColoring = true;
 
     // ---- 加载与播种 ----
 
     private static volatile TdConfig instance;
 
-    /** 懒加载单例; 首次调用发生在 DhCompat 注册前 (mod 构造期, 主线程, 无竞争). */
+    /** 懒加载单例; 首次调用发生在 mod 构造期 (主线程, 无竞争), 双检锁防御性保留. */
     public static TdConfig get() {
         TdConfig cfg = instance;
         if (cfg == null) {
@@ -61,25 +75,80 @@ public final class TdConfig {
 
     private static TdConfig load() {
         Logger log = TerrainDiffusionHorizons.LOG;
+        // 旧 JSON 检出: 提示手动迁移 (无自动迁移 — 无存量用户; 旧文件保留, 处置归 max)
+        if (Files.isRegularFile(LEGACY_JSON_PATH)) {
+            log.info("检出旧版 JSON 配置 {} (弃用中), 新配置在 {}; 手改值请自行迁移",
+                    LEGACY_JSON_PATH, CONFIG_PATH);
+        }
         if (Files.isRegularFile(CONFIG_PATH)) {
             try {
-                TdConfig cfg = GSON.fromJson(Files.readString(CONFIG_PATH), TdConfig.class);
-                if (cfg != null) {
-                    return cfg;
-                }
-                log.warn("配置解析为 null, 回退默认: {}", CONFIG_PATH);
+                // 只读解析: parse(String) 不碰磁盘写入, 坏文件原样保留
+                Config parsed = TomlFormat.instance().createParser().parse(Files.readString(CONFIG_PATH));
+                return fromToml(parsed);
             } catch (Exception e) {
-                log.warn("配置读取失败, 回退默认 (不覆盖坏文件): {}", e.toString());
+                // ParsingException / IO 全兜底: 回退默认, 不覆盖坏文件 (便于人工排查)
+                log.warn("TOML 配置解析失败, 回退默认 (不覆盖坏文件): {}", e.toString());
             }
+            return new TdConfig();
         }
-        // 播种: 无文件 (或损坏) 时写一份默认出去
+        // 播种: 无文件时写一份带注释的默认模板出去
         TdConfig cfg = new TdConfig();
         try {
-            Files.createDirectories(CONFIG_PATH.getParent());
-            Files.writeString(CONFIG_PATH, GSON.toJson(cfg));
+            Files.createDirectories(CONFIG_DIR);
+            Files.writeString(CONFIG_PATH, TEMPLATE);
         } catch (Exception e) {
             log.warn("默认配置落盘失败 (无害, 下次启动再试): {}", e.toString());
         }
         return cfg;
     }
+
+    /** 从解析后的 TOML 树取值 (全部 getOrElse 带默认: 缺键/类型不符 = 默认值, 全表兜底). */
+    private static TdConfig fromToml(UnmodifiableConfig c) {
+        TdConfig cfg = new TdConfig();
+        cfg.enabled = c.getOrElse(List.of("general", "enabled"), Boolean.TRUE);
+        cfg.surfaceBlock = c.getOrElse(List.of("terrain", "surfaceBlock"), cfg.surfaceBlock);
+        cfg.fillerBiome = c.getOrElse(List.of("terrain", "fillerBiome"), cfg.fillerBiome);
+        cfg.useBiomeSurface = c.getOrElse(List.of("terrain", "useBiomeSurface"), Boolean.TRUE);
+        cfg.vegetationColoring = c.getOrElse(List.of("vegetation", "coloring"), Boolean.TRUE);
+        // overrides: 子表 [terrain.surfaceBlockOverrides]; 缺失/类型不符 = 空 map
+        Object raw = c.get(List.of("terrain", "surfaceBlockOverrides"));
+        if (raw instanceof UnmodifiableConfig sub) {
+            for (Map.Entry<String, Object> e : sub.valueMap().entrySet()) {
+                if (e.getValue() instanceof String block) {
+                    cfg.surfaceBlockOverrides.put(e.getKey(), block);
+                }
+            }
+        }
+        return cfg;
+    }
+
+    /** 默认 TOML 模板 (播种写盘; 注释即配置的正式文档). */
+    private static final String TEMPLATE = """
+            # ============================================================
+            # Terrain Diffusion Horizons 配置
+            # 修改后重启游戏生效 (生成器注册时读取一次).
+            # ============================================================
+
+            [general]
+            # 总开关: false = 不注册 DH 生成器, DH 走原生路径 (需重进世界生效).
+            enabled = true
+
+            [terrain]
+            # 表面方块 fallback (原版 ID): useBiomeSurface = false 或群系解析失败时使用.
+            surfaceBlock = "minecraft:stone"
+            # 填充群系 fallback (原版 ID): 纯几何模式 (useBiomeSurface = false) 下 data point 携带的群系.
+            fillerBiome = "minecraft:plains"
+            # true = TD 群系驱动表面方块 (与 chunk 生成同源); false = 纯几何占位 (内存 ~150MB).
+            useBiomeSurface = true
+
+            # 群系 key -> 地表方块覆盖 (原版 ID), 仅覆地表字段, 空 = 全用内置表.
+            # 取消注释并按需增改:
+            # [terrain.surfaceBlockOverrides]
+            # "minecraft:plains" = "minecraft:snow_block"
+
+            [vegetation]
+            # 植被统计近似 (L1): 群系密度查表 + 树冠段叠加, 远景植被观感.
+            # 属统计近似非同源; L4 地物同源落地后由真实数据替代.
+            coloring = true
+            """;
 }

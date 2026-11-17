@@ -146,7 +146,10 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         }
         // ==== TD 查询 (块坐标, i=Z j=X) ====
         // 案②α: withBiomes 门控 (内存 ~520MB vs ~150MB, TEST 实测; config 关掉即退纯几何模式)
-        boolean withBiomes = TdConfig.get().useBiomeSurface;
+        TdConfig cfg0 = TdConfig.get();
+        boolean withBiomes = cfg0.useBiomeSurface;
+        // L1 植被开关 (循环外取一次; 纯几何模式 fallback 无 veg, 天然不植被)
+        boolean vegEnabled = cfg0.vegetationColoring;
         int[] b = TdLodTranslator.dataSourceBlockBounds(posX, posZ, detailLevel, cols);
         LocalTerrainProvider.RiverTerrainData data;
         try {
@@ -229,7 +232,26 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                     }
                 }
                 points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop, bedBlock, style.biome));
-                if (coverTop > solidTop) {
+                // L1 植被统计近似: 干列命中密度 → 实心顶上叠树冠段 [solidTop, vegTop).
+                // [临时] [长期记忆: 106] 确定性哈希同列永不跳变; 乘数独立于河床散列 (防两套随机相关);
+                // 高度映射纯整数: (h2 * span) >>> 8 把 [0,255] 均匀折进 [heightMin, heightMax].
+                if (vegEnabled && !waterCol && style.veg != null && style.vegBlock != null) {
+                    int gx = b[1] + x; // b = [i1(Z起), j1(X起), i2, j2] -> gx/gz = 世界块坐标
+                    int gz = b[0] + z;
+                    int h1 = (gx * 0x27D4EB2F + gz * 0x165667B1) >>> 24; // 命中散列 [0,255]
+                    if (h1 < style.veg.density) {
+                        int h2 = (gx * 0x1B873593 + gz * 0xCC9E2D51) >>> 24; // 高度散列 [0,255]
+                        int span = style.veg.heightMax - style.veg.heightMin + 1;
+                        int vegTop = Math.min(solidTop + style.veg.heightMin + ((h2 * span) >>> 8), maxY);
+                        if (vegTop > solidTop) {
+                            points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, vegTop, style.vegBlock, style.biome));
+                            coverTop = vegTop; // 干列此处 coverTop == solidTop, 直接抬升 (空气段自动让位)
+                        }
+                    }
+                }
+                // 水段仅水列开火: 干列树冠抬高的 coverTop 不得触发水段 (否则树冠上叠同区间水膜);
+                // 等效性: 旧代码 coverTop>solidTop 只能由两个水列分支造成 (均置 waterCol), 此门不改原有行为
+                if (waterCol && coverTop > solidTop) {
                     points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, coverTop, style.iceCover ? iceBlock : waterBlock, style.biome));
                 }
                 if (coverTop < maxY) {
@@ -267,8 +289,8 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
             sandBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:sand", levelWrapper);
             gravelBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:gravel", levelWrapper);
             clayBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:clay", levelWrapper);
-            // 案②α: fallback 样式 = 纯几何模式旧路径 (表面=水下=cfg.surfaceBlock, 无冰盖)
-            fallbackStyle = new ColumnStyle(surfaceBlock, surfaceBlock, fillerBiome, false);
+            // 案②α: fallback 样式 = 纯几何模式旧路径 (表面=水下=cfg.surfaceBlock, 无冰盖; 无植被)
+            fallbackStyle = new ColumnStyle(surfaceBlock, surfaceBlock, fillerBiome, false, null, null);
             return true;
         } catch (Exception e) {
             LOG.warn("wrapper 获取失败 (配置: surface={} biome={}): {}", cfg.surfaceBlock, cfg.fillerBiome, e.toString());
@@ -278,19 +300,26 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
 
     // ==== 案②α: 群系驱动的列表面样式 ====
 
-    /** 不可变列样式: 表面/水下方块 wrapper + 群系 wrapper + 冰盖标志. */
+    /** 不可变列样式: 表面/水下方块 wrapper + 群系 wrapper + 冰盖标志 + L1 植被参数. */
     private static final class ColumnStyle {
         final IDhApiBlockStateWrapper surface;
         final IDhApiBlockStateWrapper underwater;
         final IDhApiBiomeWrapper biome;
         final boolean iceCover;
+        /** L1 植被统计参数 (无植被群系/纯几何模式 = null). */
+        final TdVegetationMap.VegStat veg;
+        /** 树冠方块 wrapper (veg = null 时恒 null; 解析失败 = null 观感退化). */
+        final IDhApiBlockStateWrapper vegBlock;
 
         ColumnStyle(IDhApiBlockStateWrapper surface, IDhApiBlockStateWrapper underwater,
-                    IDhApiBiomeWrapper biome, boolean iceCover) {
+                    IDhApiBiomeWrapper biome, boolean iceCover,
+                    TdVegetationMap.VegStat veg, IDhApiBlockStateWrapper vegBlock) {
             this.surface = surface;
             this.underwater = underwater;
             this.biome = biome;
             this.iceCover = iceCover;
+            this.veg = veg;
+            this.vegBlock = vegBlock;
         }
     }
 
@@ -317,11 +346,22 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         TdConfig cfg = TdConfig.get();
         String surfaceId = cfg.surfaceBlockOverrides.getOrDefault(key, TdSurfaceBlockMap.surface(key));
         try {
+            // L1: 植被统计参数 (独立内层 try — 树冠 wrapper 失败仅退化该群系植被, 不连坐 style 本体)
+            TdVegetationMap.VegStat veg = TdVegetationMap.vegetation(key);
+            IDhApiBlockStateWrapper vegBlock = null;
+            if (veg != null) {
+                try {
+                    vegBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(veg.canopy, levelWrapper);
+                } catch (Exception ve) {
+                    vegBlock = null; // 取失败 = 观感无植被 (样式本体不受连坐)
+                }
+            }
             ColumnStyle s = new ColumnStyle(
                     DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(surfaceId, levelWrapper),
                     DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(TdSurfaceBlockMap.underwater(key), levelWrapper),
                     DhApi.Delayed.wrapperFactory.getBiomeWrapper(key, levelWrapper),
-                    TdSurfaceBlockMap.iceCover(key));
+                    TdSurfaceBlockMap.iceCover(key),
+                    veg, vegBlock);
             styleCache.put(key, s);
             return s;
         } catch (Exception e) {

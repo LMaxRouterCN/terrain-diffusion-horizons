@@ -45,6 +45,9 @@ repositories {
 dependencies {
     compileOnly files(dh_jar)
     compileOnly files(td_jar)
+    // night-config: TOML 配置解析 (Forge 运行时自带, 编译期借 mavenCentral — 本地缓存已命中 3.6.7)
+    compileOnly 'com.electronwill.night-config:core:3.6.7'
+    compileOnly 'com.electronwill.night-config:toml:3.6.7'
 }
 
 def javaTarget = (findProperty('java_version') ?: '17') as Integer

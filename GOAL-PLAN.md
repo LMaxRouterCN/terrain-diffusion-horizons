@@ -364,3 +364,51 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - .agent 三文件定夺: 入库, .gitignore 不加 .agent/ 条目 (max, 2026-11-17)
 - 源码 L23 注释已更新: modid 实测验证 + 2.3.2-b 勘误注记
 - README 双语正式版: max 过目通过, 两处手改用词已同步英文
+
+---
+
+## L 系立项案卷 (2026-11-18, max 批准"干吧", 出门期间自动模式推进)
+
+### 立项与批次
+- 可行性报告 (docs/feature-structure-feasibility.md) 五档全批, 顺序: L1 (半天) → L2 (卖点级) → L3 (先钉报告§5.3) → L4 (先钉§5.4, 树先行草殿后)。
+- 配置基建提前为第 0 步 (所有档位开关的承载)。
+- 旧阶段计划区 (S0-S5) 待统一梳理勾选, 本案卷为准。
+
+### 配置迁移 (第 0 步, 完成 2026-11-17)
+- 实况: night-config compileOnly 直用一次过, 未降 implementation; 实现三节六键 ([general]/[terrain]/[vegetation]), [structures]/[features] 节留给 L3/L4; 旧 JSON 检出仅日志提示。README 已同步。
+- TdConfig: Gson+JSON (config/terraindiffusionhorizons.json, 五键) → night-config TOML。
+- 新路径: config/terrain-diffusion-mc/terrain-diffusion-horizons.toml (与主模组同文件夹), 中文注释。
+- 依赖: com.electronwill.night-config:core+toml 3.6.7 (gradle 缓存双版本 3.6.4/3.6.7 已实证), compileOnly 起步 (Forge 运行时自带), 联编失败降 implementation。
+- 选 night-config 直用而非 ModConfigSpec: surfaceBlockOverrides 是动态 map 键, ModConfigSpec 不支持 (硬伤)。
+- 播种式 + 坏文件不覆盖模式从现 TdConfig 平移; 旧 JSON 不自动迁移 (无存量用户, 检出 log 提示, 旧文件不删)。
+- 节: [general] enabled / [terrain] surfaceBlock, fillerBiome, useBiomeSurface, surfaceBlockOverrides / [vegetation] coloring / [structures] async / [features] async, skipBelowSurface。
+
+### 新配置键 (全部默认 true)
+- vegetation.coloring: L1 植被上色总开关。
+- structures.async / features.async: 异步开关, 关 = 同步模式 (地形 LOD 扣住, 等对应车道跑完一次性完整出图, 复刻 vanilla 完整性语义, 供以速度换视觉完整的玩家)。两开关独立成栅栏: 只关地物等地物, 只关结构等结构, 全关等全部。
+
+### 执行架构 (已裁决)
+- 两车道: Pass A 地形 (TERRAIN 步, 出了就渲染) + Pass B 结构/地物 (FEATURES 步, 独立低优先级线程池吃 A 完成队列, updateFromDataSource 增量 + 向父级传播)。
+- DH 侧机械已确认: WorldGenerationQueue / FullDataUpdatePropagatorV2 / DelayedDataSourceSaveCache。
+- 车道基建随 L4 引入, 增量式无返工; 同步模式跑炸走异常隔离 (catch + 黑名单), 栅栏不死锁。
+
+### 沉没过滤器 [临时方案]
+- 一切生成物位于该列 TD 实心表面高程以下的方块一律跳过。判据 = 列表面高程 (非海平面, 神殿不误杀), 与 FakeLevel.getHeight 同列缓存同校准。
+- L4 落点 = FakeLevel.setBlock 咽喉 (y < 表面 → 丢弃且返回 true 假成功); L3 落点 = 折叠逐列裁剪; step 类别粗滤保留为省 CPU 第一道。
+- [临时] 理由: 现状 TD 无地下数据, 地下看 LOD 侧面本就纯色/空; 地下数据路线提上日程时重审 (洞穴内可见结构部分会被吞)。开关进配置 (features.skipBelowSurface)。
+
+### L1 植被统计近似 (完成 2026-11-17, 构建 13s 绿)
+- 实现: TdVegetationMap (29 群系密度表, 逐条 def 实数, 非估值) + 干列树冠段; 确定性双散列 (命中散列对密度 / 高度散列折进 [heightMin, heightMax]), 同列永不跳变; 树冠段与水段互斥, 每列仍 ≤3 段。
+- 配置: [vegetation] coloring, 默认 true; ColumnStyle 扩展 veg/vegBlock 字段 (resolveStyle 构造)。
+- tint 侦查结论已入长期记忆 (标签 tint), 本节不重述。
+- 事故: 树冠段抬 coverTop 后, 水段裸条件 (coverTop > solidTop) 在干列误发 → 树冠上叠同区间水膜; 修正 = 水段加 waterCol 门, 对旧路径纯等价 (coverTop 抬升点仅两水列分支, 均置 waterCol)。commit 前通读列循环自查抓获 — 编译绿不等于语义绿。
+
+### 软默认 (待 max 过目, 不对即推翻)
+1. 同步开关组合 = 独立栅栏语义。
+2. 跑炸 = catch + 黑名单, 代价仅该 feature 缺席。
+3. 可行性报告随首批代码一起 commit。
+
+### 事故记录 (协作质量)
+- 2026-11-18 两起: remember 标签损坏 → 短期记忆被清空后重建 (长期记忆 120); recon10 PowerShell 末行引号 typo → 脚本解析失败零输出, 重发修正。教训: 多行指令发出前核对标签配对与引号闭合。
+- 2026-11-17 五起 (自动模式): ①构建裸跑漏 TD_MIRROR 四件套 (三犯, 089 剧本重演, 白耗一轮) ②README 中文河床条目措辞照代码注释脑补 (锚了未读区间) → replace miss ③两处行中子串当锚 (replace 匹配单位 = 整行) → miss ④树冠段抬 coverTop 未同步水段条件 → 水膜 bug, commit 前读全列循环自查抓获 ⑤日期漂移: 本案卷早期条目标 11-18, 系统时钟与文件系统 (jar mtime) 实证 11-17, 新条目以 11-17 为准 (旧条目不追改, 处置归 max)。教训: 未读区间不锚; 行锚必须整行; 语义改动前通读受影响函数全文。
+- 2026-11-17 六起+讽刺一击: 发明不存在的 write 指令 (14 行全被当独立指令拒绝, 零副作用), 正主是 create; 且本条第一次补录时又拿行中子串当锚 miss — 写 "行锚必须整行" 教训的人自己犯之, 二次用整行锚才落。教训: 拿不准的指令名先 @@help fast; 锚, 整行, 无例外。

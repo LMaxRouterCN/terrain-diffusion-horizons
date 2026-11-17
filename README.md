@@ -22,7 +22,7 @@ TD 世界缩放 6：稳态约 700 chunks/s，峰值约 1500 chunks/s。
 
 ## 已知限制 / Known Limitations
 
-- **无地物与结构**：DH LOD 数据点的结构就是每列"表面段 + 水段 + 空气段"，没有 feature/structure 层；TD 模型输出的也是地形骨架（高度 + 水体 + 群系）。远距观看不受影响。
+- **无地物与结构**：DH LOD 数据点的结构就是每列"表面段 + 树冠段 + 水段 + 空气段"（树冠是统计近似，非真实地物），没有 feature/structure 层；TD 模型输出的也是地形骨架（高度 + 水体 + 群系）。远距观看不受影响。
 - **河岸散布沙/砾与原版有偏差**：这些块属于原版表面规则的噪声分支和 feature 层产物，发生在跨群系边界的碎片尺度上，LOD 采样天然拿不到
 - **LOD 阶梯感**：64 块降采样的固有几何模糊，无解。
 - **河谷色带**：远处沿河可见一条色调略异的窄带。河流在数据上是独立群系，草色按群系取色（grass tint），河流群系与两岸群系的草色有细微差异；原版近距离渲染会在群系边界对颜色做渐变过渡，而 LOD 每列数据只携带一个群系、没有这种过渡，色差就以带状暴露出来。
@@ -56,37 +56,43 @@ TDH 针对 DH 3.3.3 开发并实测通过。其余版本未测试。
 
 ## 配置 / Configuration
 
-配置文件：`config/terraindiffusionhorizons.json`（首次运行播种默认值）。
+配置文件：`config/terrain-diffusion-mc/terrain-diffusion-horizons.toml`（首次运行播种带注释的默认模板；旧版 JSON 检出时日志提示手动迁移）。
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `enabled` | `true` | 总开关，false 时不注册生成器，走 DH 原生路径 |
-| `surfaceBlock` | `minecraft:stone` | fallback 表面方块（纯几何模式或群系解析失败时） |
-| `fillerBiome` | `minecraft:plains` | fallback 群系（data point 携带） |
-| `useBiomeSurface` | `true` | 群系驱动表面；false 退纯几何模式 |
-| `surfaceBlockOverrides` | `{}` | 群系 key → 方块 ID 稀疏覆盖，只覆地表字段 |
+| `general.enabled` | `true` | 总开关，false 时不注册生成器，走 DH 原生路径 |
+| `terrain.surfaceBlock` | `minecraft:stone` | fallback 表面方块（纯几何模式或群系解析失败时） |
+| `terrain.fillerBiome` | `minecraft:plains` | fallback 群系（data point 携带） |
+| `terrain.useBiomeSurface` | `true` | 群系驱动表面；false 退纯几何模式 |
+| `terrain.surfaceBlockOverrides` | `{}` | 群系 key → 方块 ID 稀疏覆盖，只覆地表字段 |
+| `vegetation.coloring` | `true` | L1 植被树冠近似（干列按群系密度叠树冠段） |
 
-```json
-{
-  "enabled": true,
-  "surfaceBlock": "minecraft:stone",
-  "fillerBiome": "minecraft:plains",
-  "useBiomeSurface": true,
-  "surfaceBlockOverrides": {
-    "minecraft:plains": "minecraft:stone"
-  }
-}
+```toml
+[general]
+enabled = true
+
+[terrain]
+surfaceBlock = "minecraft:stone"
+fillerBiome = "minecraft:plains"
+useBiomeSurface = true
+
+# 群系 key -> 地表方块稀疏覆盖 (可选):
+# [terrain.surfaceBlockOverrides]
+# "minecraft:plains" = "minecraft:snow_block"
+
+[vegetation]
+coloring = true
 ```
 
 内存注意：`useBiomeSurface=true` 约 520MB，false 约 150MB（实测）。
-升级新版本后新增键不显示在文件里时，删除 json 让其重播种即可。
+升级新版本后新增键不显示在文件里时，删除 toml 让其重播种即可。
 配置改动需重进世界生效。
 
 ## 实现原理 / How It Works
 
 ### 架构：纯桥接层
 
-无 mixin、无 Access Transformer、无反射，全部走两端公开 API：DH 的 `DhApi.worldGenOverrides` 与 TD 的 `LocalTerrainProvider` 静态门面。六个类，职责正交：
+无 mixin、无 Access Transformer、无反射，全部走两端公开 API：DH 的 `DhApi.worldGenOverrides` 与 TD 的 `LocalTerrainProvider` 静态门面。七个类，职责正交：
 
 | 类 | 职责 |
 |---|---|
@@ -95,13 +101,14 @@ TDH 针对 DH 3.3.3 开发并实测通过。其余版本未测试。
 | `TdDhWorldGenerator` | `IDhApiWorldGenerator` 实现，核心翻译循环 |
 | `TdLodTranslator` | DH 参数 → TD 查询坐标（纯函数，零状态） |
 | `TdSurfaceBlockMap` | 65 群系表面样式剪枝表 |
-| `TdConfig` | 播种式 JSON 配置 |
+| `TdVegetationMap` | 29 群系植被统计表（L1 树冠近似） |
+| `TdConfig` | 播种式 TOML 配置 |
 
 注册链：mod 构造期挂 `DhApiLevelLoadEvent` → 世界加载回调 → 三重守卫（主世界 / TD 世界激活 / seed 可得）→ `registerWorldGeneratorOverride`。世界卸载无反注册 API，由生成器自身 `close()` 清引用。只在主世界工作（硬边界）。
 
 ### 数据流
 
-DH 生成队列 → `generateLod(posX, posZ, dl0)` → `runAsync` 壳入 DH 池线程 → TD `getRiverTerrainData(块矩形, withBiomes)` 一次拉整块 64×64 → 四个数组（`elevation` 海拔米 / `waterMask` 水强度 0-255 / `waterSurface` 液面米 / `biomeIndexes` 群系索引）→ 双循环每列翻译成 1~3 个 `DhApiTerrainDataPoint`（表面段 / 水段 / 空气段）→ `setApiDataPointColumn` → `resultConsumer` 恰一次回执。
+DH 生成队列 → `generateLod(posX, posZ, dl0)` → `runAsync` 壳入 DH 池线程 → TD `getRiverTerrainData(块矩形, withBiomes)` 一次拉整块 64×64 → 四个数组（`elevation` 海拔米 / `waterMask` 水强度 0-255 / `waterSurface` 液面米 / `biomeIndexes` 群系索引）→ 双循环每列翻译成 1~3 个 `DhApiTerrainDataPoint`（表面段 / 树冠段 / 水段 / 空气段；树冠与水互斥）→ `setApiDataPointColumn` → `resultConsumer` 恰一次回执。
 
 只供 API dl0（64 块/列，即 core 级 dl6），粗档由 DH 原生 DOWN_SAMPLED 下采样。
 
@@ -131,6 +138,10 @@ TD chunk 侧的表面方块 = vanilla `SurfaceSystem.buildSurface` × TD BiomeSo
 
 - 弱水（强度 <72）：沙 62.5% / 砾 37.5%
 - 强水（≥72）：砾 85.2% / 黏土 14.8%
+
+### 植被（L1 统计近似）
+
+`vegetation.coloring` 开启时，干列按群系植被密度查表（29 群系，`TdVegetationMap`）生长树冠段；确定性空间散列决定该列是否长树与树冠高度——同一列永不跳变。树冠段与水段互斥。属观感近似、非与 chunk 生成同源；L4 地物同源落地后由真实数据替代。
 
 ### 性能设计
 
@@ -170,7 +181,7 @@ When a world is freshly created, DH needs a warm-up: a large batch of chunks is 
 
 ## Known Limitations
 
-- **No features or structures**: a DH LOD data point column is just "surface segment + water segment + air segment"—there is no feature/structure layer; the TD model likewise outputs only the terrain skeleton (height + water + biomes). Not visible at distance.
+- **No features or structures**: a DH LOD data point column is just "surface segment + canopy segment + water segment + air segment" (the canopy is a statistical approximation, not real features)—there is no feature/structure layer; the TD model likewise outputs only the terrain skeleton (height + water + biomes). Not visible at distance.
 - **Riverbank sand/gravel scatter differs from vanilla**: these blocks come from noise branches of the vanilla surface rules and the feature layer, at fragment scale across biome boundaries—out of reach for LOD sampling.
 - **LOD staircase**: inherent geometric blur from 64-block downsampling. No fix.
 - **River valley tint band**: a narrow strip of slightly off tint along rivers, visible at distance. Rivers are a distinct biome in the data, and grass tint is taken per biome; river biomes differ slightly from their banks. Vanilla near rendering blends colors across biome boundaries, while each LOD column carries exactly one biome with no blending, so the difference shows up as a band.
@@ -204,37 +215,43 @@ TDH is developed and tested against DH 3.3.3. Other versions are untested.
 
 ## Configuration
 
-Config file: `config/terraindiffusionhorizons.json` (seeded with defaults on first run).
+Config file: `config/terrain-diffusion-mc/terrain-diffusion-horizons.toml` (a commented default template is seeded on first run; if a legacy JSON is detected, the log tells you to migrate manually).
 
 | Key | Default | Description |
 |---|---|---|
-| `enabled` | `true` | Master switch; false = generator not registered, DH's native path takes over |
-| `surfaceBlock` | `minecraft:stone` | Fallback surface block (pure-geometry mode, or failed biome resolution) |
-| `fillerBiome` | `minecraft:plains` | Fallback biome (carried by data points) |
-| `useBiomeSurface` | `true` | Biome-driven surface; false = pure-geometry mode |
-| `surfaceBlockOverrides` | `{}` | Sparse biome-key to block-ID overrides, surface field only |
+| `general.enabled` | `true` | Master switch; false = generator not registered, DH's native path takes over |
+| `terrain.surfaceBlock` | `minecraft:stone` | Fallback surface block (pure-geometry mode, or failed biome resolution) |
+| `terrain.fillerBiome` | `minecraft:plains` | Fallback biome (carried by data points) |
+| `terrain.useBiomeSurface` | `true` | Biome-driven surface; false = pure-geometry mode |
+| `terrain.surfaceBlockOverrides` | `{}` | Sparse biome-key to block-ID overrides, surface field only |
+| `vegetation.coloring` | `true` | L1 vegetation canopy approximation (dry columns get canopies by biome density) |
 
-```json
-{
-  "enabled": true,
-  "surfaceBlock": "minecraft:stone",
-  "fillerBiome": "minecraft:plains",
-  "useBiomeSurface": true,
-  "surfaceBlockOverrides": {
-    "minecraft:plains": "minecraft:stone"
-  }
-}
+```toml
+[general]
+enabled = true
+
+[terrain]
+surfaceBlock = "minecraft:stone"
+fillerBiome = "minecraft:plains"
+useBiomeSurface = true
+
+# sparse biome-key to surface-block overrides (optional):
+# [terrain.surfaceBlockOverrides]
+# "minecraft:plains" = "minecraft:snow_block"
+
+[vegetation]
+coloring = true
 ```
 
 Memory note: `useBiomeSurface=true` is about 520MB, false about 150MB (measured).
-If new keys added by an upgrade do not show up in the file, delete the json to re-seed it.
+If new keys added by an upgrade do not show up in the file, delete the toml to re-seed it.
 Config changes take effect after re-entering the world.
 
 ## How It Works
 
 ### Architecture: a pure bridge layer
 
-No mixins, no Access Transformers, no reflection—everything goes through the two sides' public APIs: DH's `DhApi.worldGenOverrides` and TD's `LocalTerrainProvider` static facade. Six classes, orthogonal responsibilities:
+No mixins, no Access Transformers, no reflection—everything goes through the two sides' public APIs: DH's `DhApi.worldGenOverrides` and TD's `LocalTerrainProvider` static facade. Seven classes, orthogonal responsibilities:
 
 | Class | Responsibility |
 |---|---|
@@ -243,13 +260,14 @@ No mixins, no Access Transformers, no reflection—everything goes through the t
 | `TdDhWorldGenerator` | `IDhApiWorldGenerator` implementation, the core translation loop |
 | `TdLodTranslator` | DH params to TD query coordinates (pure function, stateless) |
 | `TdSurfaceBlockMap` | 65-biome surface-style pruned table |
-| `TdConfig` | seeded JSON config |
+| `TdVegetationMap` | 29-biome vegetation statistics table (L1 canopy approximation) |
+| `TdConfig` | seeded TOML config |
 
 Registration chain: the mod constructor hooks `DhApiLevelLoadEvent`, then the world-load callback runs a triple guard (overworld / TD world active / seed obtainable) and calls `registerWorldGeneratorOverride`. There is no unregister API on world unload; the generator clears its own references in `close()`. Overworld only (hard boundary).
 
 ### Data flow
 
-DH generation queue → `generateLod(posX, posZ, dl0)` → `runAsync` shell onto a DH pool thread → TD `getRiverTerrainData(block rectangle, withBiomes)` pulls a whole 64×64 block at once → four arrays (`elevation` in meters / `waterMask` water intensity 0-255 / `waterSurface` water level in meters / `biomeIndexes` biome indices) → a double loop translates each column into 1-3 `DhApiTerrainDataPoint`s (surface / water / air segments) → `setApiDataPointColumn` → `resultConsumer` called exactly once.
+DH generation queue → `generateLod(posX, posZ, dl0)` → `runAsync` shell onto a DH pool thread → TD `getRiverTerrainData(block rectangle, withBiomes)` pulls a whole 64×64 block at once → four arrays (`elevation` in meters / `waterMask` water intensity 0-255 / `waterSurface` water level in meters / `biomeIndexes` biome indices) → a double loop translates each column into 1-3 `DhApiTerrainDataPoint`s (surface / canopy / water / air segments; canopy and water are mutually exclusive) → `setApiDataPointColumn` → `resultConsumer` called exactly once.
 
 API dl0 only (64 blocks per column, i.e. core-level dl6); coarser levels come from DH's native DOWN_SAMPLED downsampling.
 
@@ -279,6 +297,10 @@ Riverbed material is tiered by water intensity with deterministic spatial hashin
 
 - Weak water (intensity <72): sand 62.5% / gravel 37.5%
 - Strong water (≥72): gravel 85.2% / clay 14.8%
+
+### Vegetation (L1 statistical approximation)
+
+With `vegetation.coloring` enabled, dry columns grow canopies via a per-biome vegetation density table (29 biomes, `TdVegetationMap`); deterministic spatial hashing decides whether a column gets a tree and its canopy height—the same column never flickers. Canopy and water segments are mutually exclusive. This is a visual approximation and not same-source with chunk generation; it will be replaced by real data once L4 lands.
 
 ### Performance design
 
