@@ -412,3 +412,30 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 2026-11-18 两起: remember 标签损坏 → 短期记忆被清空后重建 (长期记忆 120); recon10 PowerShell 末行引号 typo → 脚本解析失败零输出, 重发修正。教训: 多行指令发出前核对标签配对与引号闭合。
 - 2026-11-17 五起 (自动模式): ①构建裸跑漏 TD_MIRROR 四件套 (三犯, 089 剧本重演, 白耗一轮) ②README 中文河床条目措辞照代码注释脑补 (锚了未读区间) → replace miss ③两处行中子串当锚 (replace 匹配单位 = 整行) → miss ④树冠段抬 coverTop 未同步水段条件 → 水膜 bug, commit 前读全列循环自查抓获 ⑤日期漂移: 本案卷早期条目标 11-18, 系统时钟与文件系统 (jar mtime) 实证 11-17, 新条目以 11-17 为准 (旧条目不追改, 处置归 max)。教训: 未读区间不锚; 行锚必须整行; 语义改动前通读受影响函数全文。
 - 2026-11-17 六起+讽刺一击: 发明不存在的 write 指令 (14 行全被当独立指令拒绝, 零副作用), 正主是 create; 且本条第一次补录时又拿行中子串当锚 miss — 写 "行锚必须整行" 教训的人自己犯之, 二次用整行锚才落。教训: 拿不准的指令名先 @@help fast; 锚, 整行, 无例外。
+## 2026-11-18 · A批 L1 植被虚拟树格重构 (aad924c, 已部署 TEST 待重测)
+
+- 旧 density 观感表退役 (回收站可恢复), 数据全源重推: vanilla worldgen json 三目录 (biome/placed/configured) + javap 类常量 (蘑菇茎/竹竿高/竹噪声).
+- TdVegetationMap: TreeType + 池千分比 + VegStat{cell, radiusCells}; 29 群系; 权重和=1000 与覆盖充分性静态校验.
+- Generator: cell 格哈希树 — 干段 + 悬空冠段 (锚树心干顶, conical 锥) + 竹噪声列层 (Biome.BIOME_INFO_NOISE 直引, chunk 中心采样) + 冠下缝显式 air; 段游标 cursor 无缝平铺.
+- 近似声明全套入 javadoc. jar 28638B 部署 TEST mods (旧 jar .bak-20261118); 世界(6) LOD sqlite 移 D:\temp 备份 (其余 7 世界不动).
+- 待 max: 重测 (悬空冠段渲染 = 全案唯一未实测项, 兜底 = 冠段贴地退化) + 三分支决定 (竹两层/蘑菇双倍茎/竹 chunk 块状采样).
+- 事故: replace 旧文本凭记忆 miss 一发 (BROWN_MUSH 双倍茎), read 原文后二发落; 铁律: replace 旧文本只能来自 read.
+
+## 2026-11-18 · B批立项 (设计稿待 max 过审, docs/batch-b-design.md)
+
+- 车道 = 计算核心 (纯函数 region→段) + 调度外壳 (async 开关; false = 生成线程内联, 零等待原语); 缓存表 = 车道与 generate 唯一交界面.
+- 里程碑: B1 骨架+两 async 键 → B2 oracle 撒点+locate 对照 → B3 视觉 (甲=不渲染等 L3 [推荐] / 乙=锚点色块, 呈 max 裁决).
+- 待验 5 项见设计稿 §7 (B1 首件事 = DH 刷新 API javap). create 渠道截断事故: 头部 §0-3 未落盘 (3845 字符刀口), 分段补写中.
+## B批: 异步车道 / L2 结构撒点 / TOML 配置 (2026-11-18 启动)
+
+立项令 (max 2026-11-17, 逐字存档 [长期记忆: 123]): 结构和地物 LOD 与地形 LOD 分开不阻塞; 快的就快跑, 慢的就慢慢跑; 结构/地物异步单独两个配置项; 配置改 TOML 带注释; 挪进 config/terrain-diffusion-mc/; 关了 = 同步模式 (地形 LOD 生成前等地物结构全跑完才显示); 默认开.
+
+- 设计稿: docs/batch-b-design.md — §10 侦查终稿 (DH 无主动刷新 API, 路径1判死; 数据面获取链全闭环: provider.queuePositionForRetrieval, 全 public 零反射)
+- 范围: B批 = 车道基建 + TdStructureOracle (L2 撒点) + TOML + 同步语义; L3 结构组装 = C批; L4 逐株地物 = D批
+- 架构 (设计稿 §2): 车道 = 计算核心 (纯函数, 无状态无锁) + 调度外壳 (async 开关唯一职责 = 决定核心执行位置); 缓存表 = 车道与 generate 的唯一交界面; 同步模式 = generate 调用栈内联, 零等待原语, 非跨线程等待
+- B1 落地 (commit 816051d): dh/lane/ 五文件空载荷骨架 (LaneCore 接口 / LaneSegment record, 方块 ID 字符串 wrapper 转换留 B3 / LaneRegionKey 缓存键 / LaneManager 调度外壳: 自起池懒起 daemon + in-flight 去重 + 异常黑名单不连坐 / LaneManagers 两车道聚合绑配置四键) + TdConfig [structure]/[features] 四键与 TOML 模板两段 + DhCompat 追订 LevelUnload 清缓存 + generator seed 守卫后插桩 — cores 空恒短路, 行为与 A 批零差异 (B1 验收基线)
+- 两点裁决执行记录: [vegetation] 段不动 (L1 花草 = 同步快路径, 开关归 [vegetation]); [features] 为 L3/L4 真地物车道占位; executor = 自起池 (懒起单线程 daemon; 与 DH 生成链解耦 + core 内部池版本漂移风险大 + 黑名单自包含) — 依据设计稿 §4.1/§4.2 + max 开工令执行, TEST 交付透明呈现, 可逆
+- B1 验收 TEST 协议: ① config 播种两新段带注释 ② "车道"日志零出现 (cores 空短路) ③ LOD 零回归 (与 A 批同观感) ④ 退世界出现 "车道缓存已清"
+- B2 预告: 刷新链路打通 (待验 #6: 已有 LOD 的 section 再 submit 是否短路) + TdStructureOracle 撒点 + /locate 同 seed 对照 (max 亲跑, 眼见为实)
+- B3: L2 视觉 (设计稿 §6 甲/乙, max 未裁决; 推荐 = 甲: B批不渲染结构视觉, L3 一次到位真方块)
+- 待验残留: #2 concentricRings 性能 (B2) / #3 多人 registry 同步 (B2) / #6 LOD 短路 (B2)
