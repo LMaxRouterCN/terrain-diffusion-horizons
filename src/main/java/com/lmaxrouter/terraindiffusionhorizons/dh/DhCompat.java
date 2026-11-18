@@ -3,10 +3,12 @@ package com.lmaxrouter.terraindiffusionhorizons.dh;
 import com.github.xandergos.terraindiffusionmc.world.WorldScaleManager;
 import com.lmaxrouter.terraindiffusionhorizons.TdConfig;
 import com.lmaxrouter.terraindiffusionhorizons.TerrainDiffusionHorizons;
+import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LaneManagers;
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.api.interfaces.world.IDhApiLevelWrapper;
 import com.seibel.distanthorizons.api.methods.events.DhApiEventRegister;
 import com.seibel.distanthorizons.api.methods.events.abstractEvents.DhApiLevelLoadEvent;
+import com.seibel.distanthorizons.api.methods.events.abstractEvents.DhApiLevelUnloadEvent;
 import com.seibel.distanthorizons.api.methods.events.sharedParameterObjects.DhApiEventParam;
 import net.minecraft.server.level.ServerLevel;
 
@@ -35,7 +37,14 @@ public final class DhCompat {
                 onLevel(param.value.levelWrapper);
             }
         });
-        TerrainDiffusionHorizons.LOG.info("DH 兼容层已挂钩 (LevelLoad 事件监听中)");
+        // [B1] 车道生命周期: 世界卸载清车道缓存 (订阅一次常驻; 数据按世界隔离, 池跨世界复用)
+        DhApiEventRegister.on(DhApiLevelUnloadEvent.class, new DhApiLevelUnloadEvent() {
+            @Override
+            public void onLevelUnload(DhApiEventParam<DhApiLevelUnloadEvent.EventParam> param) {
+                LaneManagers.onLevelUnloadAll();
+            }
+        });
+        TerrainDiffusionHorizons.LOG.info("DH 兼容层已挂钩 (LevelLoad/Unload 事件监听中)");
     }
     /** LevelLoad 回调: 守卫链 + 注册 (跑在 DH 事件线程, 只做轻量判断与注册). */
     private static void onLevel(IDhApiLevelWrapper levelWrapper) {

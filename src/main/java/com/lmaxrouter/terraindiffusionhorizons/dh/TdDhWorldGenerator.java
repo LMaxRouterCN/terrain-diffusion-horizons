@@ -5,6 +5,7 @@ import com.github.xandergos.terraindiffusionmc.pipeline.LocalTerrainProvider;
 import com.github.xandergos.terraindiffusionmc.world.HeightConverter;
 import net.minecraft.world.level.biome.Biome;
 import com.lmaxrouter.terraindiffusionhorizons.TdConfig;
+import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LaneManagers;
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.api.enums.worldGeneration.EDhApiDistantGeneratorMode;
 import com.seibel.distanthorizons.api.enums.worldGeneration.EDhApiWorldGenerationStep;
@@ -145,6 +146,12 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
             LOG.warn("seed 不符 (TD={} 期望={}), 跳过本数据源", LocalTerrainProvider.getSeed(), expectedSeed);
             return;
         }
+        // ==== [B1] 车道骨架占位: cores 空表全短路, 行为与 A 批完全一致 ====
+        // B2 塞入 LaneCore 后激活: async=true 地形 LOD 先行, 车道后台补算 + 刷新;
+        // async=false generate 调用栈内联一次成型; 返回段 B3 合并点消费 (设计稿 §2/§3/§5)
+        LaneManagers.structure().pollOrSubmit(expectedSeed, detailLevel, posX, posZ);
+        LaneManagers.features().pollOrSubmit(expectedSeed, detailLevel, posX, posZ);
+
         // ==== TD 查询 (块坐标, i=Z j=X) ====
         // 案②α: withBiomes 门控 (内存 ~520MB vs ~150MB, TEST 实测; config 关掉即退纯几何模式)
         TdConfig cfg0 = TdConfig.get();

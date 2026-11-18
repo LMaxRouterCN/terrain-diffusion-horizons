@@ -58,6 +58,21 @@ public final class TdConfig {
      *  若实测 DH 采样使两色分家, 开此即启用 (TdFlowerMap 草池数据已备). */
     public boolean grassColoring = false;
 
+    // ---- [B1] 异步车道四键 (docs/batch-b-design.md §4.1; 骨架空载荷, B2 起消费) ----
+
+    /** [structure] 结构车道总开关: false = 结构车道不计算 (B2 载荷: TdStructureOracle 同源撒点). */
+    public boolean structureEnabled = true;
+
+    /** [structure] 结构车道异步: true = 地形 LOD 先发布, 车道后台算完刷新补全;
+     *  false = 同步模式, generate 调用栈内联, 地形 LOD 扣住等车道算完才显示 (一次成型无闪烁). */
+    public boolean structureAsync = true;
+
+    /** [features] 地物车道总开关 (L3/L4 真地物载荷占位; L1 花草色斑是同步快路径, 开关在 [vegetation] 段). */
+    public boolean featuresEnabled = true;
+
+    /** [features] 地物车道异步 (语义同 structure.async). */
+    public boolean featuresAsync = true;
+
     // ---- 加载与播种 ----
 
     private static volatile TdConfig instance;
@@ -114,6 +129,11 @@ public final class TdConfig {
         cfg.useBiomeSurface = c.getOrElse(List.of("terrain", "useBiomeSurface"), Boolean.TRUE);
         cfg.vegetationColoring = c.getOrElse(List.of("vegetation", "coloring"), Boolean.TRUE);
         cfg.grassColoring = c.getOrElse(List.of("vegetation", "grassColoring"), Boolean.FALSE);
+        // [B1] 车道四键 (缺键/类型不符 = 默认值)
+        cfg.structureEnabled = c.getOrElse(List.of("structure", "enabled"), Boolean.TRUE);
+        cfg.structureAsync = c.getOrElse(List.of("structure", "async"), Boolean.TRUE);
+        cfg.featuresEnabled = c.getOrElse(List.of("features", "enabled"), Boolean.TRUE);
+        cfg.featuresAsync = c.getOrElse(List.of("features", "async"), Boolean.TRUE);
         // overrides: 子表 [terrain.surfaceBlockOverrides]; 缺失/类型不符 = 空 map
         Object raw = c.get(List.of("terrain", "surfaceBlockOverrides"));
         if (raw instanceof UnmodifiableConfig sub) {
@@ -157,5 +177,20 @@ public final class TdConfig {
             # 草丛色斑 (留口): 草丛与草方块同色 (共用群系 grass colormap), 默认关.
             # 若远景实测发现 DH 采样使草丛色与草方块分家, 开此启用草池.
             grassColoring = false
+
+            [structure]
+            # 结构 LOD 车道 (B1 骨架占位, B2 起接入同源撒点计算).
+            # 总开关: false = 结构车道不计算.
+            enabled = true
+            # 异步: true = 地形 LOD 先发布, 结构算完自动刷新补全 (不拖慢地形出图);
+            #       false = 同步模式, 地形 LOD 扣住等结构算完才显示 (一次成型, 无刷新闪烁).
+            async = true
+
+            [features]
+            # 地物 LOD 车道 (L3/L4 真地物载荷占位; L1 花草色斑是同步快路径, 开关在上方 [vegetation] 段, 不受此段影响).
+            # 总开关: false = 地物车道不计算.
+            enabled = true
+            # 异步: 语义同 [structure].async.
+            async = true
             """;
 }
