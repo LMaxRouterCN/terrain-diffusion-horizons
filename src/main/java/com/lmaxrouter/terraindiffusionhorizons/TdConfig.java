@@ -52,8 +52,11 @@ public final class TdConfig {
     /** [terrain.surfaceBlockOverrides] 群系 key -> 方块 ID 稀疏覆盖, 仅覆地表字段 (水列方块与冰盖不受影响; 空 = 全用内置表). */
     public Map<String, String> surfaceBlockOverrides = new LinkedHashMap<>();
 
-    /** [vegetation] L1 植被统计近似开关: 群系密度查表 + 树冠段叠加 (远景观感; 临时近似, L4 由真实数据替代). */
+    /** [vegetation] L1 花草色斑开关: 群系花池查表, 列顶 1 格按 vanilla 密度概率换花色 (远景观感; 统计近似, L4 地物同源后由真实数据替代). */
     public boolean vegetationColoring = true;
+    /** [vegetation] 草丛色斑开关 (留口): 草丛与草方块共用群系 grass colormap, 换上大概率等于没换, 默认关;
+     *  若实测 DH 采样使两色分家, 开此即启用 (TdFlowerMap 草池数据已备). */
+    public boolean grassColoring = false;
 
     // ---- 加载与播种 ----
 
@@ -110,6 +113,7 @@ public final class TdConfig {
         cfg.fillerBiome = c.getOrElse(List.of("terrain", "fillerBiome"), cfg.fillerBiome);
         cfg.useBiomeSurface = c.getOrElse(List.of("terrain", "useBiomeSurface"), Boolean.TRUE);
         cfg.vegetationColoring = c.getOrElse(List.of("vegetation", "coloring"), Boolean.TRUE);
+        cfg.grassColoring = c.getOrElse(List.of("vegetation", "grassColoring"), Boolean.FALSE);
         // overrides: 子表 [terrain.surfaceBlockOverrides]; 缺失/类型不符 = 空 map
         Object raw = c.get(List.of("terrain", "surfaceBlockOverrides"));
         if (raw instanceof UnmodifiableConfig sub) {
@@ -147,8 +151,11 @@ public final class TdConfig {
             # "minecraft:plains" = "minecraft:snow_block"
 
             [vegetation]
-            # 植被统计近似 (L1): 群系密度查表 + 树冠段叠加, 远景植被观感.
+            # 花草色斑 (L1): 群系花池查表, 列顶 1 格按 vanilla 密度概率换花色, 远景观感.
             # 属统计近似非同源; L4 地物同源落地后由真实数据替代.
             coloring = true
+            # 草丛色斑 (留口): 草丛与草方块同色 (共用群系 grass colormap), 默认关.
+            # 若远景实测发现 DH 采样使草丛色与草方块分家, 开此启用草池.
+            grassColoring = false
             """;
 }

@@ -149,8 +149,9 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         // 案②α: withBiomes 门控 (内存 ~520MB vs ~150MB, TEST 实测; config 关掉即退纯几何模式)
         TdConfig cfg0 = TdConfig.get();
         boolean withBiomes = cfg0.useBiomeSurface;
-        // L1 植被开关 (循环外取一次; 纯几何模式 fallback 无 veg, 天然不植被)
-        boolean vegEnabled = cfg0.vegetationColoring;
+        // [max 2026-11-18 裁决] L1 树格(含竹层)属地物范畴且半成品跳级, 配置控制断开恒关;
+        // 代码保留待地物批参考, 地物批落地后整块退役; vegetationColoring 归还花草上色层 [长期记忆: 126]
+        boolean vegEnabled = false;
         int[] b = TdLodTranslator.dataSourceBlockBounds(posX, posZ, detailLevel, cols);
         LocalTerrainProvider.RiverTerrainData data;
         try {
@@ -232,7 +233,62 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                                 : (h < 218 ? gravelBlock : clayBlock); // 强水: 砾 85.2% / 黏土 14.8%
                     }
                 }
+                // ==== L1 花草色斑 (列级概率近似; 视觉目标 = 方案 b, 发射形态 = 方案 a 帽段) ====
+                // 守卫: cfg 开关 + 干列 (水列顶是水/冰盖) + 列顶在地表以上 + 群系有花草样式;
+                // 花优先于草, 草池受 grassColoring gate (草色≈草方块色, 留口默认不发, TdFlowerMap 类注 6)
+                IDhApiBlockStateWrapper topBlock = null;
+                if (cfg0.vegetationColoring && !waterCol && solidTop > dataBottom && style.flower != null) {
+                    int gx = b[1] + x; // 世界块坐标 (与 [C] 河床分档散列同源)
+                    int gz = b[0] + z;
+                    // 列哈希: 结构 (XOR 流) 与尾盐均区别于树格, 避免花斑与树格系统性同位
+                    long fh = mix64(expectedSeed ^ gx * 0x9E3779B1L ^ gz * 0x85EBCA77L ^ 0x27D4EB2FL);
+                    int roll = (int) Long.remainderUnsigned(fh, 1000);
+                    VegPool flowerPool = style.flower.flowers;
+                    VegPool grassPool = cfg0.grassColoring ? style.flower.grasses : null;
+                    VegPool hitPool = null;
+                    if (flowerPool != null && roll < flowerPool.permille) {
+                        hitPool = flowerPool; // 命花 (permille = 列顶是花的概率)
+                    } else if (grassPool != null && roll >= 1000 - grassPool.permille) {
+                        hitPool = grassPool; // 命草 (留口: grassColoring 开启才可达)
+                    }
+                    if (hitPool != null) {
+                        // 二次哈希扫权重前缀和: 池内条目采样 (与 roll 独立)
+                        long ph = mix64(fh + 0x9E3779B97F4A7C15L);
+                        int r = (int) Long.remainderUnsigned(ph, hitPool.total);
+                        for (int wi = 0; wi < hitPool.wrappers.length; wi++) {
+                            if (r < hitPool.prefix[wi]) {
+                                topBlock = hitPool.wrappers[wi];
+                                break;
+                            }
+                        }
+                    }
+                }
+                // 基础段发射: 原单段 [底, 顶) 恒发; 命中 = 顶上方加 [顶, 顶+1) 花草帽段
+                // [bug根因 2026-11-18 TEST 实测症状 + 机制推断(jar 溯源同轮验证)] 旧拆段方案:
+                // 花/草 = cross 非 solid, DH 顶面取色吃 topmost 段但列高跳过非 solid 段
+                // → 花列整体矮 1 格 ("上色块下沉" = 坑); 坑壁 4 侧 = +4 quad/命中列,
+                // cherry 14% 列命中 → quad +56% → FPS 500→~300 实测吻合.
+                // 帽段修法: 列高走 bed 段顶 (地形高度不动), 取色走帽段 (花色); 与 vanilla 几何
+                // 一致 (花长在草上方, 非替换); 悬崖侧面仍 bed 色 (方案 b 视觉目标保持).
+                // maxY 守卫防顶越界 (段 [顶, 顶+1) 需 顶+1 <= maxY).
                 points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop, bedBlock, style.biome));
+                if (topBlock != null && solidTop < maxY) {
+                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, solidTop + 1, topBlock, style.biome));
+                    // [bug根因 2026-11-18] 帽段占用 [solidTop, solidTop+1) 但 coverTop 未抬升, 尾段 air 仍按
+                    // [coverTop(=solidTop), maxY) 发射 → 与帽段重叠; DH 段堆叠不变量 (top-down: prev.bottom == cur.top)
+                    // 在 air/帽边界被切 → "gap between [X] and [X]" 两值相等 = 重叠指纹 → 每命中列炸 → LOD 零输出.
+                    // 修: 帽段发射后抬 coverTop, 尾段 air 从帽上起 (solidTop+1<=maxY 由外层 if 守卫保证).
+                    coverTop = solidTop + 1;
+                }
+                // [半成品·停用 2026-11-18 max裁决] L1 植被虚拟树格 (含竹层), 地物范畴半成品:
+                // 跳级+形状bug+配置接错 → 配置断开恒关 (vegEnabled=false), 代码保留待地物批参考.
+                // 现状清单:
+                // ① 发射bug(未修): 块形冠段无离心调制 = 立方体树冠 (实测筷子插豆腐), 见下方冠段BUG标注;
+                //    Chebyshev 距离方角 = 另一小病灶 (角落补刀可修, 未修).
+                // ② 已实测验证: 悬空冠段+冠下 air 段渲染协议通过 [长期记忆: 115 结案]; tint 链生效.
+                // ③ 未验证: 云杉锥形观感 / cherry 垂叶 / pink_petals 机制.
+                // ④ 数据侧 (TdVegetationMap) 无罪: 表驱动, 字段全带 json/javap 出处.
+                // 下接原设计备忘 (内容继续有效, 半成品现状以上述清单为准):
                 // L1 植被虚拟树格 [长期记忆: 123 勘误: dl0 列 = 1x1 块; 旧 density 观感标定表已退役]:
                 // 世界按 cell 划格, 每 cell 确定性哈希恰一棵树 (格内抖动 / 池权重 / 干高 =
                 // trunkBase+U(0,randA)+U(0,randB) 双独立哈希, vanilla trunk_placer 双 nextInt 同构);
@@ -328,6 +384,8 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                                 }
                             }
                             // 冠段: 锥形 (距树心越远越窄底越高) / 块形 (干顶上 canopyH 厚悬空冠)
+                            // [BUG·停用未修 2026-11-18] 块形 else 分支 cb/ct 与离心 dc 无关 = 全列同一 y 区间 = 立方体树冠;
+                            // 修法 = 离心衰减推广 (dc=0 满厚, 边缘矮半截), 见上方树格块现状清单
                             int cb;
                             int ct;
                             if (type.conical) {
@@ -401,7 +459,7 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
             gravelBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:gravel", levelWrapper);
             clayBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:clay", levelWrapper);
             // 案②α: fallback 样式 = 纯几何模式旧路径 (表面=水下=cfg.surfaceBlock, 无冰盖; 无植被)
-            fallbackStyle = new ColumnStyle(surfaceBlock, surfaceBlock, fillerBiome, false, null, null, null, null);
+            fallbackStyle = new ColumnStyle(surfaceBlock, surfaceBlock, fillerBiome, false, null, null, null, null, null);
             return true;
         } catch (Exception e) {
             LOG.warn("wrapper 获取失败 (配置: surface={} biome={}): {}", cfg.surfaceBlock, cfg.fillerBiome, e.toString());
@@ -411,7 +469,69 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
 
     // ==== 案②α: 群系驱动的列表面样式 ====
 
-    /** 不可变列样式: 表面/水下方块 wrapper + 群系 wrapper + 冰盖标志 + L1 植被参数. */
+    // ==== L1 花草色斑: 池结构与构建 (TdFlowerMap 数据 -> wrapper 化) [长期记忆: 124 数据源] ====
+
+    /** 列顶色斑池: 方块 wrapper + 权重前缀和 (单条目失败 = 不收录; 空池 = null 不建). */
+    private static final class VegPool {
+        /** 池对齐的方块 wrapper. */
+        final IDhApiBlockStateWrapper[] wrappers;
+        /** 权重前缀和: prefix[i] = 前 i+1 条目权重累计. */
+        final int[] prefix;
+        /** 权重总和 (二次哈希取模域). */
+        final int total;
+        /** 列顶命中概率 (permille, 千分比). */
+        final int permille;
+
+        VegPool(IDhApiBlockStateWrapper[] wrappers, int[] prefix, int total, int permille) {
+            this.wrappers = wrappers;
+            this.prefix = prefix;
+            this.total = total;
+            this.permille = permille;
+        }
+    }
+
+    /** 群系花草样式: 花/草两池 (纯几何模式/无花草群系/池全失败 = null). */
+    private static final class FlowerStyle {
+        /** 花池 (无花群系 = null). */
+        final VegPool flowers;
+        /** 草池 (留口: 数据照建, 消费 gate 在发射端 cfg.grassColoring). */
+        final VegPool grasses;
+
+        FlowerStyle(VegPool flowers, VegPool grasses) {
+            this.flowers = flowers;
+            this.grasses = grasses;
+        }
+    }
+
+    /**
+     * 构建列顶色斑池: 条目 wrapper 懒取, 单条目失败跳过 (观感少一种, 不连坐整池 — 与树池单型
+     * 失败同策略); 无条目/概率 0/全失败 = null. 花池草池同构, 草池消费 gate 在发射端.
+     */
+    private VegPool buildVegPool(TdFlowerMap.Entry[] entries, int permille) {
+        if (entries == null || entries.length == 0 || permille <= 0) {
+            return null;
+        }
+        IDhApiBlockStateWrapper[] wrappers = new IDhApiBlockStateWrapper[entries.length];
+        int[] prefix = new int[entries.length];
+        int total = 0;
+        int cnt = 0;
+        for (TdFlowerMap.Entry entry : entries) {
+            try {
+                wrappers[cnt] = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(entry.state, levelWrapper);
+                total += entry.weight;
+                prefix[cnt] = total;
+                cnt++;
+            } catch (Exception we) {
+                // 单条目 wrapper 失败 = 跳过该条目 (不连坐)
+            }
+        }
+        if (cnt == 0) {
+            return null;
+        }
+        // 尾部空槽收缩 (全限定免 import)
+        return new VegPool(java.util.Arrays.copyOf(wrappers, cnt), java.util.Arrays.copyOf(prefix, cnt), total, permille);
+    }
+    /** 不可变列样式: 表面/水下方块 wrapper + 群系 wrapper + 冰盖标志 + L1 植被/花草参数. */
     private static final class ColumnStyle {
         final IDhApiBlockStateWrapper surface;
         final IDhApiBlockStateWrapper underwater;
@@ -425,12 +545,15 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         final IDhApiBlockStateWrapper[] leaves;
         /** 竹方块 wrapper (veg.bamboo = false 时 null). */
         final IDhApiBlockStateWrapper bamboo;
+        /** L1 花草色斑样式 (无花草群系/纯几何模式 = null; 草池数据照建, 消费 gate 在发射端). */
+        final FlowerStyle flower;
 
         ColumnStyle(IDhApiBlockStateWrapper surface, IDhApiBlockStateWrapper underwater,
                     IDhApiBiomeWrapper biome, boolean iceCover,
                     TdVegetationMap.VegStat veg,
                     IDhApiBlockStateWrapper[] logs, IDhApiBlockStateWrapper[] leaves,
-                    IDhApiBlockStateWrapper bamboo) {
+                    IDhApiBlockStateWrapper bamboo,
+                    FlowerStyle flower) {
             this.surface = surface;
             this.underwater = underwater;
             this.biome = biome;
@@ -439,6 +562,7 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
             this.logs = logs;
             this.leaves = leaves;
             this.bamboo = bamboo;
+            this.flower = flower;
         }
     }
 
@@ -491,12 +615,23 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                     leaves = null;
                 }
             }
+            // L1 花草色斑样式: 花池草池都建 (草池 = 留口数据, 消费 gate 在发射端 cfg.grassColoring);
+            // 池失败仅退化该群系花草, 不连坐 style 本体 (与 veg 池同策略)
+            FlowerStyle flowerStyle = null;
+            TdFlowerMap.FlowerStat fs = TdFlowerMap.stat(key);
+            if (fs != null) {
+                VegPool flowerPool = buildVegPool(fs.flowers, fs.flowerPermille);
+                VegPool grassPool = buildVegPool(fs.grasses, fs.grassPermille);
+                if (flowerPool != null || grassPool != null) {
+                    flowerStyle = new FlowerStyle(flowerPool, grassPool);
+                }
+            }
             ColumnStyle s = new ColumnStyle(
                     DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(surfaceId, levelWrapper),
                     DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(TdSurfaceBlockMap.underwater(key), levelWrapper),
                     DhApi.Delayed.wrapperFactory.getBiomeWrapper(key, levelWrapper),
                     TdSurfaceBlockMap.iceCover(key),
-                    veg, logs, leaves, bamboo);
+                    veg, logs, leaves, bamboo, flowerStyle);
             styleCache.put(key, s);
             return s;
         } catch (Exception e) {

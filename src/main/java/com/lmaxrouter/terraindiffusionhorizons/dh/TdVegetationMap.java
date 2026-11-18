@@ -31,6 +31,8 @@ import java.util.Map;
  * ⑥ 无条目 = 该群系无植被 (沙漠/沙滩/雪盖裸原/峰系/恶地/石质/海洋/河流/下界/末地/洞穴).</p>
  *
  * <p>[临时] [长期记忆: 106] feature 层近似一律标临时待替代, L4 地物同源落地后本表退役.</p>
+ * <p>[停用 2026-11-18 max裁决] 发射端断开 (vegEnabled=false 恒关), 本表暂无消费者;
+ * 形状 bug 根因与现状清单见 TdDhWorldGenerator 树格块注释.</p>
  */
 public final class TdVegetationMap {
 
