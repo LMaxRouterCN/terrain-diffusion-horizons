@@ -439,3 +439,14 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - B2 预告: 刷新链路打通 (待验 #6: 已有 LOD 的 section 再 submit 是否短路) + TdStructureOracle 撒点 + /locate 同 seed 对照 (max 亲跑, 眼见为实)
 - B3: L2 视觉 (设计稿 §6 甲/乙, max 未裁决; 推荐 = 甲: B批不渲染结构视觉, L3 一次到位真方块)
 - 待验残留: #2 concentricRings 性能 (B2) / #3 多人 registry 同步 (B2) / #6 LOD 短路 (B2)
+
+## B2: 结构撒点载荷 + 刷新链 (2026-11-20 落地)
+
+- 侦查全闭环 (六轮): 撒点数学全字节码钉死 (potential / 四 reducer / 排除区递归), DH 刷新链全 public (SharedApi.tryGetDhServerWorld -> getOrLoadServerLevel -> getFullDataProvider -> queuePositionForRetrieval), 参数源 = 服务端 ResourceManager 读 vanilla structure_set json (fork 无覆盖 + 无 openloader 实证)
+- 数学策略: 零复刻 — WorldgenRandom / LegacyRandomSource / setLargeFeatureWithSalt / setLargeFeatureSeed / evaluate 全 vanilla public 直调, 魔法常量一行不抄 (例外: mineshaft reducer 盐 10387320 为 vanilla 硬编码, 注释标字节码出处); /locate 对照从"验实现"降为"验参数读取"
+- 载荷模型: sealed LanePayload permits LaneSegment / StructureHit; B2 = 坐标事实 (StructureHit: setName, chunkX, chunkZ), 零视觉 (设计稿 §6 甲/乙呈 max, B3 门)
+- 文件: 新 6 (LanePayload / StructureHit / LaneRefreshHook / StructureSetParams / TdStructureSpreadCore / DhRefreshHook) + 改 3 (LaneManager 泛型换 LanePayload + 刷新钩子 + 完成日志 + unload 静音; LaneSegment 接口挂接; DhCompat 注册核心 + 参数装配 + 生命周期)
+- 白名单 15 overworld 集合, namespace=minecraft only (模组 structure_set = 悬案 #3); 出局 4 (strongholds rings / end_cities / nether_complexes / nether_fossils)
+- 刷新: encodeContaining((byte)(dl+6), 数据源中心块) 规避段网格半宽偏移疑云; provider 懒解析 (LevelLoad 时序未验, 规避); 生成器 DL 界 0/0 -> DH 仅 dl0 拉取, submitRetrievalTask 界检查天然放行
+- 验收: 异步模式进世界 -> TDH-Lane 完成日志 (命中列表带 block 坐标) -> max tp 远 LOD 圈 /locate village -> 包含性对照 (oracle ⊇ locate; locate 含 TD 群系过滤, 过滤属 L3 层)
+- 待验 #6 观察点: 完成日志后 LOD 是否刷新 (静止 = 短路证据, 退 canRegenerate 方案); #2 rings = 白名单跳过即销; #3 多人 registry = B2 只读 vanilla json 已规避单人侧
