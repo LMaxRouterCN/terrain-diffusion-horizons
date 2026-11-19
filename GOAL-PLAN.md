@@ -450,3 +450,12 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 刷新: encodeContaining((byte)(dl+6), 数据源中心块) 规避段网格半宽偏移疑云; provider 懒解析 (LevelLoad 时序未验, 规避); 生成器 DL 界 0/0 -> DH 仅 dl0 拉取, submitRetrievalTask 界检查天然放行
 - 验收: 异步模式进世界 -> TDH-Lane 完成日志 (命中列表带 block 坐标) -> max tp 远 LOD 圈 /locate village -> 包含性对照 (oracle ⊇ locate; locate 含 TD 群系过滤, 过滤属 L3 层)
 - 待验 #6 观察点: 完成日志后 LOD 是否刷新 (静止 = 短路证据, 退 canRegenerate 方案); #2 rings = 白名单跳过即销; #3 多人 registry = B2 只读 vanilla json 已规避单人侧
+
+### B2 冒烟结论 (2026-11-20 02:4x 收口, 世界"新的世界(14)" seed=5303470317317397359)
+
+- 六看点全 PASS: 撒点装配 15 集合 / 车道核心注册 / region 完成行格式 / 缓存命中 / 退世界清理 / 生成器注册 seed。TDH 错误行 0。
+- 吞吐: 3702 region 约 6 分钟活跃期, 车道 1 核约 10 region/s, 事件链 (首调-线程池-完成流-缓存命中-清理) 全程贯通。
+- 15 类型全命中, 数量级与 vanilla spacing 直觉一致 (buried_treasures 577 最多 / woodland_mansions 7 最稀 / villages 56)。
+- locate 同源数学验证: oracle 撒点 villages@chunk(464,55)=block(7424,880) 与 vanilla locate 返回 [7424, ~, 880] 逐位相等 (正向硬证据); snowy 属 LOD 圈外 NOT TESTED 非失败 (locate 坐标可从 ChatComponent 日志行找回, LocateCommand 本体只记耗时)。
+- 待验清算: #6 缓存复用方向实证 (tp 后 LOD 重拉 11 条命中); #2 rings 白名单已规避; #3 多人 registry 本阶段只读 vanilla json 未触碰。submit 短路方向 B2 无视觉通道可观 (结构零渲染), 留 B3。
+- B2 = 坐标事实层收口; 结构视觉方案 (设计稿 §6 甲/乙) 留 B3 门呈 max 裁决。完整数据: docs/smoke-b2.md。
