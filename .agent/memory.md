@@ -391,8 +391,8 @@ DH generateLod 坐标语义定案 (2026-11-15 数据正确性案根因, javap+�
 tag: DistantHorizons, TDH项目, bug根因, 坐标语义, javap
 <!-- END:088 -->
 <!-- ID:089 -->
-2026-11-15 TDH构建坑补遗(勘误版, 推翻本条初版"createMinecraftArtifacts真重执行+因果闭环"断言): 漏设TD_MIRROR=1时createMinecraftArtifacts报"Execution failed for task"壳错(NFRT 1.0.13解析死: SNI阻断+四大镜像404+GitHub零release+forge maven不镜像=NFRT为neoforged maven独占); 补全四件套后24s全绿, 但验尸实况=该任务UP-TO-DATE未执行, 且两次FAILED之间无任何成功执行——"失败任务不可能UP-TO-DATE"的gradle语义断言被现实否定。转变机制未实证; 最简模型(模型非实证): moddev将NFRT作懒解析任务输入, init.d仓恢复→解析成功→更早(06:01)成功history复效→跳过执行; NFRT从不进modules-2缓存亦旁证moddev自定义解析路径。第一次失败与成功构建的唯一环境差异=TD_MIRROR, 因果方向仍立。教训: ①无实证不断言gradle内部行为, 说"不确定" ②部署物正确性的终局证据=javap字节码直验jar, 不靠构建过程链推理 ③开工先检索长期记忆(同035教训, 二犯)。
-tag: 构建坑, TDH项目, terrain-diffusion-horizons, TD_MIRROR, 网络环境
+2026-11-17 TD_MIRROR 漏设三犯定案 (035 一犯白绕12回合 / 089 初版二犯 / 本日三犯白耗两轮): TDH L1 构建裸跑 gradlew build 又漏四件套, 补齐后 22s 绿。四件套 = TD_MIRROR=1 + GRADLE_USER_HOME=F:\MOVED\.gradle + JAVA_HOME=E:\Java\Zulu\zulu-17 + TEMP=TMP=D:\temp。程序性结论: 本机跑任何 TD 系 gradlew (TD fork / TDH) 开工第一件事 = 四件套, 无例外; TD_MIRROR 是 init.d 镜像闸门, 不设 = neoform-runtime 死走 maven.neoforged.net (SNI 阻断) 且 NFRT 不进 modules-2 缓存, --offline 也救不了 (089 初版正文保留机制分析)。TDH 与 TD fork 构建差异: TDH 单项目扁平结构, gradlew 直接在仓库根跑; TD fork 必须 cd versions\1.20.1 跑 buildForgeWindows。TDH 全缓存命中 build --offline 约 13~22s。
+tag: 构建坑, 构建配方, TDH项目, terrain-diffusion-horizons, TD_MIRROR, 网络环境
 <!-- END:089 -->
 <!-- ID:090 -->
 2026-11-15 javap假阴性坑实证(TDH案): javap -c 不带 -p 只反汇编 public/protected 成员, private 方法整段缺席输出——class常量池物理存在的字符串在视图里消失, 判"部署物可疑"即假阴性。铁证: 同一TdDhWorldGenerator.class(11170B), 无-p只吐83行/4175B, 加-p吐502行/27081B, 观测串(TD data.width...)位于private generateInternal内, -p即现。连带清白洗冤: PS管道与Start-Process raw落盘字节级一致(非管道罪); Console UTF-8中文无损。终局姿势(优先级序): ①验证部署jar含某字符串/常量 → zip条目字节级直搜(System.IO.Compression.ZipFile读entry, UTF8解码, Contains, 纯ASCII锚最稳)绕过一切显示层 ②javap验私有方法必须-p -c ③成员可见性预判: 同包package-private/private方法常驻实现类。元教训: 连续三个断言被现实否(gradle UP-TO-DATE不可能→实际UP-TO-DATE / PS管道吃行→实际一致 / javap视图=全貌→实际按可见性裁剪), 视图类工具的显示范围本身是待验证项, 断言必附证据, 字节级是唯一不动层。参考: TDH坐标案d759a33部署物验证三判据流程。
@@ -508,3 +508,124 @@ tag: TDH项目，terrain-diffusion-horizons，voxy，选型，README
 2026-11-17 README行数异常案: 终验144行后, 本轮替换前发现146, 多出L9-10两行max口吻voxy手注; 我方窗口零写入(替换为ReadAllLines单元素赋值, 数学上不减行), 围栏锚点68/78→70/80精确+2, 全文排查无其他非我稿内容, 证据指向max在终验后直接手改了文件(读README时顺手批注). 教训: (1)我落盘后的验证结论会被用户并发手改作废, 任何写操作前必须重读现场取实时锚点, 不能拿旧回执当现状; (2)行数/内容异常先用内容锚点定位插入点再排查自身, 未排除外部编辑前禁止"修复"——本轮若信旧count按144去对齐, 会误删他的两行; (3)带冒号前缀的口述体手注是用户主观创作, 发现后只问不改.
 tag: 坑，PokerAgent，协作模式，README
 <!-- END:114 -->
+<!-- ID:115 -->
+2026-11-18 TDH地物/结构同源可行性审查完结(javap五轮实证, 报告=docs/feature-structure-feasibility.md, 164行)。架构级结论:
+①vanilla 1.20.1撒点链纯函数全public: getPotentialStructureChunk(long,int,int)零chunk上下文(链: setLargeFeatureWithSalt(worldSeed,floorDiv(x,spacing),floorDiv(z,spacing),salt)→RandomSpreadType.evaluate×2), isStructureChunk对state依赖仅getLevelSeed+exclusionZone, ChunkGeneratorStructureState.createForNormal(RandomState,long,BiomeSource,HolderLookup<StructureSet>)静态工厂无需真实世界 → 结构判定同源可完整离线复现。
+②装饰RNG链chunk间feature间零耦合: setDecorationSeed(worldSeed,cx,cz)每chunk独立纯函数, 每PlacedFeature前setFeatureSeed(decorationSeed,index,step)独立重播种 → "流式随机锁死地物复现"是错误认知, 流式墙只在单feature.place()内部。地物逐株从"干不了"上调至"硬干"。
+③介质无API墙: FullDataSourceV2.dataPoints=每列LongArrayList段数无上限, EDhApiWorldGenerationStep原生有FEATURES/STRUCTURE_START; 悬空段渲染行为未实测。
+④DH官方路线=INTERNAL_SERVER真跑vanilla管线(WorldGenStructFeatManager=假StructureManager真读region盘, 靠RegionFileStorageExternalCache), 数学同源路线DH无人区, 但vanilla public API兜底充分无需mixin/AT。
+⑤五档: L1统计近似舒服干/L2撒点舒服干/L3组装麻烦点(templateManager+jigsaw边界)/L4逐株硬干(FakeWorldGenLevel三高频路径getHeight/getBlockState/getBiome→TD数据; 折损=block predicate近似, 定性"分布同源+个别坐标错")/L4+完全一致干不了(predicate查真实方块网格, TD数据源物理不可能)。
+⑥性能全挂DH生成线程FPS零影响, 数字均推算非实测。
+⑦待验6项: 多人worldgen registry不同步(TD场景json未动不受影响)/RandomState离线构造可见性/客户端templateManager/悬空段渲染/concentricRings秒级/L4 biomeFilter近似层。
+落地方向(待max裁决): L1半天→L2卖点级→L3(先钉templateManager)→L4树先行草殿后。
+tag: TDH项目，terrain-diffusion-horizons，worldgen种子链，地物，结构，同源
+<!-- END:115 -->
+<!-- ID:116 -->
+2026-11-17 javap 语言参数坑: 该环境下 javap -J-Duser.language=en 的 -J 参数会被解析层拆成 "-J-Duser" + ".language=en" 两个 token, 之后所有参数(含-classpath/-p/类名)全被 javap 当类名报"找不到类"→整轮全灭。对策=JAVA_TOOL_OPTIONS 环境变量注入(PowerShell: $env:JAVA_TOOL_OPTIONS='-Duser.language=en'), 纯环境传递零参数解析, 已实测有效(javap输出首行出现"Picked up JAVA_TOOL_OPTIONS: ..."即生效; PS侧记得Where-Object滤掉Picked up行)。附带: 该环境exec回执中脚本内中文标记必mojibake, 脚本内标记串用ASCII。
+tag: javap, 坑，技巧，PokerAgent
+<!-- END:116 -->
+<!-- ID:117 -->
+2026-11-18 recon6 静态门全开(六项零阻塞): ①RandomState.create 两 public static 重载, BiomeSource 抽象面 3 方法, 单人可偷活实例 ②StructureTemplateManager 构造四输入(ResourceManager/LevelStorageAccess/DataFixer/HolderGetter<Block>)全 public 单人可得 ③假 ChunkGenerator=11 抽象方法 8 桩 + getBaseHeight/getBaseColumn 映 TD; applyBiomeDecoration 是 ChunkGenerator 具体方法, 装饰编排子类继承白送 ④DH 两车道机械原生存在: WorldGenerationQueue(生成→updateFromDataSource→applyToParent 一处打通, 参考实现), FullDataUpdatePropagatorV2, DelayedDataSourceSaveCache(异步批量落盘, 写放大不成立) ⑤columnGenerationSteps 是 DH 增量生成承重账本(GeneratedFullDataSourceProvider/PregenManager/多人 FullDataSourceRequestHandler 三方消费) ⑥悬空段+闪烁=运行时项, 零成本旁证=原版 DH 卸载林子的树冠段渲染 ⑦TDH 挂钩面=TdDhWorldGenerator(IDhApiGenerator 实现)+TdLodTranslator ⑧多人客户端 RegistryAccess 是否含 worldgen 动态注册表未验(单人无此问题, 多人挂 §5.1 前提)。建议落地批次: L1+L2 先行, L3 第三, L4 压轴+车道基建。报告 §5.2/5.3 已标已验证, §5.4 改运行时项旁证, §6 附两车道候选架构(标待裁决)。
+tag: TDH项目，terrain-diffusion-horizons，地物，结构，同源
+<!-- END:117 -->
+<!-- ID:118 -->
+2026-11-18 L4 地物通用性结论: 复刻编排层(applyBiomeDecoration)而非逐 feature 翻译 → 模组地物零成本自动进入(模组加地物的唯一正道=把 PlacedFeature 塞进 biome features 列表, 编排层拿到的 Holder<PlacedFeature> 来源无差别)。三层通用度: 判定层 100% 免费 / 执行层大多数(FakeLevel 四高频面覆盖) / 视觉层有物理上限(地下地物白算, DL1+ 折叠)。RNG 独立(已实证)解锁: ①选择性执行不破坏同源(跳过矿石不改树的序列)→ step 分类默认开关+配置黑白名单 ②异常隔离不连坐(模组 feature 炸=catch+黑名单, 等于没来过)。工程要求: 列缓冲需 feature 级事务(炸不留半棵树)。最坏情况: 依赖真实世界活状态的模组 feature 永远跑不成, 兜底=catch+黑名单, 属 L4+ 物理墙边缘摩擦非新增风险。"树先行"是验证顺序选择, 非架构选择, 第一条管线通=模组地物顺流进来。
+tag: TDH项目，terrain-diffusion-horizons，地物，通用性，架构
+<!-- END:118 -->
+<!-- ID:119 -->
+2026-11-18 沉没过滤器定稿+临时化 (max 裁决): 表面以下方块一律跳过。判据=列TD实心表面高程(非海平面, 神殿不误杀, 与FakeLevel.getHeight同列缓存同校准[记忆101], 单一表面定义)。L4落点=FakeLevel.setBlock咽喉(y<表面→丢弃+返回true假成功); L3落点=折叠逐列裁剪(整piece沉没连组装跳); step粗滤=省CPU第一道。max 指出并裁决为[临时方案]: 玩家在地下看LOD侧面现状=纯色块/空(TD无地下数据, max实测), 现状零可见损失, 但焊死成永久决策会封死地下路线(将来TD地下数据/LOD地下填充落地时, 洞穴内可见结构部分如要塞墙会被吞) → 标临时, 地下视野提上日程时重审, 先按跳过用。教训: "与现状同构"只在现状时间轴内成立, 架构论断要过未来兼容性检查。
+tag: TDH项目，terrain-diffusion-horizons，地物，架构，坑
+<!-- END:119 -->
+<!-- ID:120 -->
+2026-11-18 PokerAgent指令事故: 多行指令(remember)的[code]开始标签损坏(疑似混入不可见字符), 框架把remember解析为无内容=清空短期记忆, 记忆内容后续行被解析为3条未知指令。教训: ①发出多行指令前核对[code]/[/code]/[cmd]/[/cmd]标签配对完整性, 尤其复制粘贴处; ②回执出现"未知指令:"=格式事故信号, 立即回查指令原文; ③remember被清空后第一时间重建(replace/exec的成功回执可佐证哪些事实已完成)。
+tag: PokerAgent, 指令格式, 坑
+<!-- END:120 -->
+<!-- ID:121 -->
+2026-11-18 DH 3.3.3 LOD 渲染 tint 链实证 (javap, L1 设计依据): LOD 方块颜色 = 贴图采样 × 群系 tint, biomeWrapper 来自 data point。链: AbstractDhTintGetter implements class_1920(BlockAndTintGetter), update(BiomeWrapper, BlockStateWrapper, FullDataSourceV2, IClientLevelWrapper) 逐块喂 biome; ClientBlockStateColorCache.getColor(BiomeWrapper, FullDataSourceV2, DhBlockPos, boolean) 直收 biome 参数; unwrapClientBiome(BiomeWrapper)→原版 Biome 走原生 color resolver。EColorMode=Default/Flower/Leaves/Chisel/Glass (贴图采样模式)。备用通道: AbstractDhTintGetter.setStaticColor(BlockStateWrapper, BiomeWrapper, Integer) 静态色覆盖; API 层 DhApiBlockColorOverrideEvent.onBlockColorOverridden 事件。运行时旁证: 记忆110 河岸 tint 色带=biome tint 已在生效。结论: TDH data point 已填 TD 真实群系 key → 基础植被色免费; L1 剩余=统计树冠段(密度手抄表[临时]+确定性哈希+leaves段)。
+tag: TDH项目，terrain-diffusion-horizons，DistantHorizons，tint，L1
+<!-- END:121 -->
+<!-- ID:122 -->
+2026-11-18 PokerAgent replace 指令双事故 (第三起格式事故系列): ①新旧code块顺序写反 — 第一个块必须是旧文本(文件现状), 第二个块才是新文本; 反了=框架拿新文本当旧文本搜索, 必失败, 回执"旧:"列显示的是新文本内容即此症。②缩进精确匹配 — replace按缩进精确匹配, 相似度报告规范化空白后可达100%但精确匹配判死; read回执行号后的空白=分隔符+行内容缩进混合, 凭肉眼/印象解码缩进必错(案例: 循环体内8/16sp, 但方法内try块里是12/20sp, 按前者写锚点失败)。铁律: replace锚点缩进拿不准时先用exec让PowerShell吐精确前导空格数( $ind=0; while($l[$ind] -eq ' '){$ind++} ), 不猜。
+tag: 指令格式，坑，PokerAgent，replace
+<!-- END:122 -->
+<!-- ID:123 -->
+2026-11-17 max 指令逐字存档 (源=max 粘贴聊天记录恢复; 丢失根因=指令只入短期记忆, remember 标签损坏清空事故[记忆120]炸掉唯一副本后被覆盖, 从未入长期记忆 → 铁律: 用户指令当场逐字入长期记忆, 短期记忆是旋转缓冲不是仓库):
+①立项令(逐字): "干吧,植被上色搞配置项开关,结构和地物lod和地形lod分开,不阻塞地形生成,快的就快跑,慢的就慢慢跑,结构异步生成和地物异步生成单独两个配置项,配置文件格式改成toml,写注释,挪进config里的terrain-diffusion-mc文件夹"
+②同步语义(逐字): "关了就是同步模式,地形lod生成之前等地物和结构全跑完才显示,默认开,兴许有人就是觉得值得用速度换视觉没有缺陷呢" → 异步开关语义=关即同步(地形LOD扣住等对应车道全跑完一次性发布), 默认true=异步
+③沉没过滤器临时化: "标临时,先直接跳过用着" (详见119)
+④批次: 六门全开后裁定 L1+L2 一批先行, L3第三, L4压轴; max 过目后"干吧"
+⑤五档定级/两车道机械/通用性/性能账: 见115/117/118
+⑥[max实测三反馈, b8afe8e后] ①树叶满铺无间距(真因: density 200≈78%块级命中+无树干+冠段贴地; dl0一列=1×1块[实证TdLodTranslator], TdVegetationMap javadoc"64×64块/列"是错的待修) ②异步模式默认关 ③异步没做配置开关 → ②③定谳(TEST播种TOML实证): 车道+开关整个未实现, 根因=报告§6"车道随L4引入"排期压过max"现在就要分开"原话, 判决错误: max原话优先级>报告排期
+tag: TDH项目，terrain-diffusion-horizons，max指令，异步车道，配置
+<!-- END:123 -->
+<!-- ID:124 -->
+[2026-11-18] TDH L1植被虚拟树格落地(A批, max"都干"令下实施). 架构: TdVegetationMap表驱动(TreeType{log,leaves,trunkBase+randA+randB[vanilla trunk_placer双nextInt同构],canopyR,canopyH,conical,doubleStemPermille} + PoolEntry千分比 + VegStat{cell,pool,bamboo,maxCanopyR,radiusCells=(maxR-1)/cell+1}); Generator列逻辑=3x3邻域cell反查(格哈希splitmix64混expectedSeed, 格内抖动+前缀和选型+双独立哈希干高+树心地面取elevation[树心]+干段止conical冠底+悬空冠段锚树心干顶+冠下缝显式air段+段游标cursor推进). 数据源: vanilla json=E:\MC\.minecraft\versions\1.20.1-Forge_47.4.0\1.20.1-Forge_47.4.0.jar 的 data/minecraft/worldgen 三目录(已解包%TEMP%\van_wg_x); 类常量=F:\MOVED\.gradle\...\recompile_4980ba80425e3551a9686b3f7aca8d812454ef91_output.jar javap(蘑菇茎4+nextInt(3)且1/12翻倍[红褐共用], 竹竿5+nextInt(12), 竹count=ceil((Biome.BIOME_INFO_NOISE静态字段(x/80,z/80)+0.3)*160), 噪声1234种子世界无关直引). cell=round(sqrt(256/N)): 森林5/黑森林4/丛林3/竹林3(巨树层30.1×0.75)/平原72/蘑菇16. 关键修正史: plains权重19:1=0.05棵非0.1; jungle去bush池jungle545/mega273/fancy182. 近似声明在javadoc(count尝试上限未扣survive/冠形状块级退化/2x2粗干压单列/bush与竹丛剔除). 未实测: 悬空冠段渲染(TEST首验, 兜底=冠段贴地退化). 旧density观感表已入回收站退役.
+tag: TDH项目, L1, 植被, 架构决策
+<!-- END:124 -->
+<!-- ID:125 -->
+[B1侦查#7结案 2026-11-18] DH 3.3.3 数据面获取链全闭环(十轮javap/zip反索, 全public零反射): api LevelLoad事件EventParam.levelWrapper(public final)→instanceof core ILevelWrapper防御后强转(皮实同体实锤: core ILevelWrapper常量池直接引用api接口)→SharedApi.tryGetDhServerWorld()(public static, 单机=DhClientServerWorld/dedicated=DhServerWorld)→IDhServerWorld.getOrLoadServerLevel(ILevelWrapper)(default幂等)→IDhServerLevel.getFullDataProvider()→运行时实例GeneratedFullDataSourceProvider: get(pos)/getAsync读 | updateDataSourceAsync(FullDataSourceV2)写回+父级传播 | queuePositionForRetrieval(Long)重生成(内部委托WorldGenerationQueue.submitRetrievalTask, 自带闸门+去重)。备选直达: dhLevel.serverside.fullDataFileHandler(ServerLevelModule public final字段)。时序幂等对冲。ServerApi字节码同款姿势实证。编译: core直调+compileOnly钉3.3.3(WrapperFactory_forge S1先例)。#6(LOD短路)留B2实测。终稿: docs/batch-b-design.md §10
+tag: B1侦查, DistantHorizons, 刷新, 架构, terrain-diffusion-horizons
+<!-- END:125 -->
+<!-- ID:126 -->
+[2026-11-18 max勘误"都干"语义+范围重划] max语义: 植被=花草上色(列级变色, 不显示本体); 树=地物范畴(按方块精度显示形状, 归地物批); "都干"=把活干完非范围扩张。
+[终态] L1树格(含竹层)判停: 半成品+跳级+配置接错, max裁决断开配置恒关(vegEnabled=false硬编码), 代码+注释保留待地物批参考。现状清单三道防线落账: TdDhWorldGenerator树格块头注释+冠段[BUG]标注+TdVegetationMap停用声明+本条。
+[现状] ①发射bug未修: 块形冠段cb/ct与离心dc无关=全列同y区间=立方体树冠(实测"筷子插豆腐"); conical分支有调制; 修法=离心衰减推广(三行级); Chebyshev方角另病未修 ②已验证: 悬空冠段+冠下air段渲染通过(115结案), tint链生效 ③未验证: 云杉锥观感/cherry垂叶+pink_petals ④数据侧TdVegetationMap无罪(表驱动全出处)。
+[花草层新主线] 列级确定性哈希命中换列顶state=色斑, 复用mix64; 数据从van_wg_x花池json抄表; risk: cross贴图采样色未验+非solid方块DH端处理未知, TEST首验。
+tag: TDH项目, L1, 植被, 地物, 范围, 停用
+<!-- END:126 -->
+<!-- ID:127 -->
+[2026-11-18 三连败教训: PokerAgent exec PowerShell 脚本安全规则]
+① 语句级运行时错误不终止整个脚本, throw 不可靠, 尾部成功输出不代表中间步骤成功 → 守卫必须正向 if + 每步显式 OK/FAIL 输出 + 事后 read 读回终审。
+② PS 双引号字符串内禁引号字符: PS 转义符是反引号, \" 无效 (会被当字符串终结符 parse 炸); 措辞直接绕开引号。
+③ 禁用未在本项目实证过的 .NET API (教训: 捏造了 Match::EscapeReplacement, .NET 无此方法); 只用已跑通族: [IO.File]::ReadAllText/WriteAllText, 字符串 .Contains/.Replace, ConvertFrom-Json。
+④ 多行块替换倾向改纯插入 (锚点行前/后插), 锚点用读回验证过的唯一单行, 避免 regex。
+tag: PokerAgent, exec指令, 坑, PowerShell
+<!-- END:127 -->
+<!-- ID:128 -->
+[2026-11-18 教训: PokerAgent 指令集里没有 write 指令] 捏造不存在的指令 (write) 发送, 框架把
+tag: PokerAgent, exec指令, 坑
+<!-- END:128 -->
+<!-- ID:129 -->
+[2026-11-18 code块反引号坑·两轮实证闭环] code块内的裸反引号会被框架吃掉(使用指南明示: 想写入原样反引号必须先转义, 即反引号是标记字符). 实证: PowerShell行切分模式(反引号r问号反引号n, 本意CR可选LF)被吃成字面r问号n → 在每个字母n处碎行 → 依赖整行内容的IndexOf/正则锚两轮全miss(B1写码事故); 同脚本内ReadAllLines诊断正常(不经切分), 目标文件本身干净(行len精确吻合). 修复配方(脚本零反引号): [IO.File]::ReadAllLines读行 / -match后跟双引号内反斜杠r反斜杠n检测CRLF(反斜杠原样传给正则引擎解释) / 字面CRLF用 -join [char[]](13,10), LF用 [string][char]10 / 按检测行尾join后WriteAllText写回. remember/memory内容同样禁反引号(曾致remember块碎成未知指令+短期记忆被清空). 工程教训: 写码+build+commit+部署同块串联, throw能拦住后续全部步骤, 防半成品白烧冷启动.
+tag: PokerAgent, exec指令, 坑, PowerShell, 反引号
+<!-- END:129 -->
+<!-- ID:130 -->
+[2026-11-18 PS函数return解包坑·B1事故第三轮] PowerShell函数内 return $list (List[T]) 时 pipeline 会把集合解包, 调用方拿到的是 Object[] 而非 List (单元素时更是裸标量); 参数按位传入不解包, 只有 return 路径解包. 在解包后的 Object[] 上调用 List 专属方法(如 InsertRange)时, PS 成员枚举机制把调用下放给每个元素, 报错文本是元素类型("Method invocation failed because [System.String] does not contain a method named 'InsertRange'")而非接收者类型(Object[]) — 报错类型有系统性误导, 勿按报错类型反推接收者. 修复: return ,$L (逗号包一层抑制解包) 或 Write-Output -NoEnumerate, 或不用函数直接内联构造. 诊断口诀: 报错类型与接收者预期不符时, 先怀疑函数返回值被 pipeline 解包.
+tag: PowerShell, 坑, 技巧, exec指令
+<!-- END:130 -->
+<!-- ID:131 -->
+[2026-11-19 TDH 部署配方定稿] ① 构建产物 jar 名 = Gradle archive 连字符形式 terrain-diffusion-horizons-<版本>.jar (不是 modid terraindiffusionhorizons, 曾按 modid 猜 filter 零命中); 选件配方: build\libs 内取最新且名字不含 sources 的 jar + 健全性检查(名字含 horizon 且不含 distant). ② 部署目标 = TEST 实例 mods: E:\MC\.minecraft\versions\TEST 1.20.1-Forge_47.4.10\mods [长期记忆: 041]; 部署后清 mods 内异名旧 TDH jar 防双加载(旧版 git 可复现). ③ 播种式配置坑: TdConfig 只对新文件播种 TEMPLATE, 已存在的旧 toml 永不自动长新键/新段 — TEST 旧 toml 已手动补 [structure]/[features]; 真用户场景将来需版本化重播种. ④ mods 现存 terrain-diffusion-horizons-0.1.0.jar.bak-20261118 旧备份(非 .jar 后缀 Forge 不扫, 无害, 删否归 max).
+tag: 测试环境, 构建坑, terrain-diffusion-horizons, TDH项目, 部署
+<!-- END:131 -->
+<!-- ID:132 -->
+[2026-11-19 TD fork 三连崩案·结案] 根因 = Files.createDirectories(Windows junction) 在 JDK 17 抛 FileAlreadyExistsException, JDK 21 幂等 (实证: 11-16/11-18 成功会话 java 21.0.7 Azul, 2026-11-19 晚三连崩 java 17.0.12; 同 jar 同路径唯一变量 JVM. 机制解释=21 跟随链接/17 不跟随, 置信度中). 环境布局: TEST 实例 terrain-diffusion-models = junction → ..\Industrial Revolution 2040\terrain-diffusion-models (真身 4.24GB, IR2040 装正式版 TD 2.3.0, TEST 装 fork). junction 建于 11-07 19:46, 11-15~11-19凌晨 Java 21 全绿. 崩点: fork ModelAssetManager.ensureAssetsReady:67 (CONSTRUCT 阶段, TerrainDiffusionMc.<init>:35 → bootstrap:58 → initialize:70). 修复正解 = 前置 if (!Files.isDirectory(dir)) 再 createDirectories (isDirectory 跟随链接, junction/真目录/不存在三态全对). PS 坑: junction 的相对 target 不能直接 Test-Path (基准=当前工作目录), 须按 junction 父目录拼绝对路径.
+tag: bug根因，terrain-diffusion-mc, 测试环境, 坑, JVM
+<!-- END:132 -->
+<!-- ID:133 -->
+[MC 日志轮转规律 2026-11-19 实证] TEST 实例 logs 归档: 文件名日期 = 被归档会话的起始日(非轮转时刻), 同日多次启动索引递减分配(S1→-N ... 最后会话→latest), .gz 的 mtime = 下一次会话启动时刻(轮转发生时). 判读法: 要看"第 k 次启动"的日志, 按 mtime 排序而非按文件名索引; 崩溃会话日志小(启动即崩), 正常会话大. 曾因此把 -3(凌晨成功会话)误标成"今晚首崩". debug 日志同规律 (debug-N.gz 全局递减计数).
+tag: Minecraft, 坑, 技巧, 日志
+<!-- END:133 -->
+<!-- ID:134 -->
+[2026-11-19 PCL2 Java 选择自动丢失·实测案例] PCL2 的 Java 选择设置会自行丢失回退 (max 原话"pcl抽风给我java21干掉了"). 实录: TEST 实例凌晨还用 E:\Java\zulu214219 (21.0.7 Azul), 晚上选择丢失回退 E:\Java\Zulu\zulu-17 (17.0.12) → 触发 TD fork 的 junction 崩 (memory 132 的雷). 机器上 Java 全家福: zulu214219=21.0.7 / zulu21=21.0.4 / jdk-21=21.0.2 / Zulu\zulu-17=17.0.12, 都活着, 漂移发生在 PCL2 选择层非 Java 损坏. 教训: "昨晚还好好的今天就崩" → 先看日志 ModLauncher 启动行的 java version 再谈别的.
+tag: PCL2, 坑, Java, Minecraft, bug根因
+<!-- END:134 -->
+<!-- ID:135 -->
+[2026-11-19 陈清单事故·教训] 短期记忆里 carried 的"等max清单"条目未随代码演进刷新: 11-18 max 裁决停用 L1 树格(记忆126), 但"悬空树冠待测+三分支"旧条目一直躺在清单里, 11-19 夜我照旧条目给 max 编验收目检单 → max 找不到树 → 误报"地物完全不生成" → 白烧两轮侦查后翻案. 铁律: 从记忆捞出的待办/验收/清单条目, 喂给 max 前必须对当前代码与部署状态复核 (git log 近5条 + 关键注释 grep); 记忆是缓存, 代码是事实源.
+tag: 坑, 技巧, 勘误
+<!-- END:135 -->
+<!-- ID:136 -->
+[PowerShell 参数展平坑 2026-11-20] 字面量嵌套数组 @(@('a','b'), @('c','d')) 作为函数参数传入时被展平成一维 @('a','b','c','d') — foreach 迭代出的是单个字符串, $p[0]/$p[1] 取的是字符串前两个字符而非预期的两个元素。TDH B2 事故实录: (old,new) 替换对数组被展平成 6 串, 实际执行了 Replace('r','e') + Replace('p','u') 两轮全文件单字符替换, StructureSetParams.java 全毁 (return→eetuen, fromJson→feomJson), javac 报 30 错。教训: ①PowerShell 里做文本替换直接内联写 $t.Replace($old,$new), 不封装 (old,new) 对数组; ②验证环节输出为空 = 失败, 回执里 Select-String 无任何输出必须当红旗处理, 不能只看前面的 OK 行; ③.NET String.Replace 区分大小写 (大写 P 幸存是定位线索); ④修复用整文件重写 (public 修饰直接写入内容), 不再走 exec 字符串替换。
+tag: 坑, 技巧, exec指令, PowerShell
+<!-- END:136 -->
+<!-- ID:137 -->
+TDH (terrain-diffusion-horizons) B2 里程碑达成 (2026-11-20): 结构撒点 oracle (TdStructureSpreadCore) 冒烟全绿。最硬证据: oracle 撒点 villages@chunk(464,55)=block(7424,880) 与 vanilla locate 返回 [7424,880] 逐位相等 (seed=5303470317317397359, 世界"新的世界(14)")。15 集合白名单全命中, 3702 region/6min/1核车道~10region/s, 缓存命中 11 条 (tp 后 LOD 重拉, 异步刷新环路闭环), 退世界清 3702 region, TDH 错误 0。locate 坐标可从 ChatComponent 日志行找回 (LocateCommand 本体只记耗时)。撒点命中=结构粗位置 (region 级), B3 才做结构形状/BF loads。commit 728cbdc 为 B2 代码基线。
+tag: TDH项目, B2, 同源, 结构, 验证, 里程碑
+<!-- END:137 -->
+<!-- ID:138 -->
+TDH 设计稿 §6 裁决 (2026-11-20 03:00 max 拍板): 甲案 — B2 结构撒点保持零视觉 (纯坐标事实层), 远景结构视觉统一由 L3 真地物载荷层出图; 乙案 (锚点色块占位) 被否, 理由=临时视觉债, L3 落地即作废, 不值得搭一次要拆的渲染管线。连带影响: B3 原主题 (视觉) 取消; submit 短路观察依赖视觉通道, 随之悬空; B3 剩余范围 (结构形状/BF loads 数据层归属, 是 B3 做还是并入 L3) 待理清。裁决时 B2 已全案收口 (commit 1280bb5, 撒点 oracle 与 vanilla locate 同源数学逐位相等实证)。
+tag: TDH项目，架构决策，B3, 裁决，视觉
+<!-- END:138 -->
+<!-- ID:139 -->
+TDH 勘误 (2026-11-20 05:1x): .agent 三文件 2026-11-17 已由 max 定夺 (入库, .gitignore 不加 .agent/ 条目, GOAL-PLAN 案卷 grep "三文件定夺" 可查), 非悬案。我当日在裁决文档里误当悬案呈报并臆造 "待决策 5" 编号, 已双处勘误。根因: 只读 "待 max 决策" 节头 (当时仅 4 条) 就当全集, 没全文 grep, 漏掉散落在历史批次记录里的销案标记。规矩 (通用): 核对任何 "待决策/悬案/待办" 清单, 必须先全文 grep 关键词, 节头只是目录不是全集。另: 备忘录 "薪火相传" 原话语境是 PokerAgent 框架 .gitignore 模板设计, 与 TDH 项目定夺结论同向但不同案, 引用时注意分层。
+tag: TDH项目, 勘误, 教训, 待决策清单核对, 悬案
+<!-- END:139 -->

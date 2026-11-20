@@ -459,3 +459,15 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - locate 同源数学验证: oracle 撒点 villages@chunk(464,55)=block(7424,880) 与 vanilla locate 返回 [7424, ~, 880] 逐位相等 (正向硬证据); snowy 属 LOD 圈外 NOT TESTED 非失败 (locate 坐标可从 ChatComponent 日志行找回, LocateCommand 本体只记耗时)。
 - 待验清算: #6 缓存复用方向实证 (tp 后 LOD 重拉 11 条命中); #2 rings 白名单已规避; #3 多人 registry 本阶段只读 vanilla json 未触碰。submit 短路方向 B2 无视觉通道可观 (结构零渲染), 留 B3。
 - B2 = 坐标事实层收口; 结构视觉方案 (设计稿 §6 甲/乙) 留 B3 门呈 max 裁决。完整数据: docs/smoke-b2.md。
+
+## 2026-11-20 05:00 · B3 主题空缺, 边界裁决待 max
+
+- [长期记忆: 138] §6 裁决取消 B3 原主题 (视觉) 后, 剩余问题 = biome 过滤 (BF 滤) 归 B3 单独做还是并入 L3 (C 批)。选项分析: docs/b3-l3-boundary-decision.md (甲=并入 L3 推荐 / 乙=B3 单独)。
+- .agent 三文件: 非悬案 — max 2026-11-17 已定夺入库, .gitignore 不加 .agent/ 条目 (GOAL-PLAN 案卷 grep ".agent 三文件定夺" 可查)。勘误: 前一条自称销 "待决策 5", 编号系臆造 (待决策节仅 4 条) 且属重复销案, 已改写; 备忘录 "薪火相传" 原话是 PokerAgent 框架 .gitignore 模板语境, 仅同向旁证。
+- 自动模式边界: 准备工作全落盘, 不替决, 等 max 回 A/B。
+
+## 2026-11-20 (max 归) · 裁决落定: 甲案, B 批收口, C 批开工
+
+- max 拍板 (原话 "1干吧,4随便,其他不用管"): 甲案 = BF 滤 (biome 过滤) 并入 L3, B 批就地收口, B3 批号空缺。L3 主题 = biome 过滤 + 组装 + 剪影可见层 (原 B3 视觉并入, [长期记忆: 138])。选项分析存档: docs/b3-l3-boundary-decision.md。
+- 同场销案: tdseedprobe 悬案 (max "不用管"); 备忘录 tdh 分区 "审查硬编码,配置化" 维持备忘录不动。
+- commit 授权 "随便" = 本轮自行落; push 未提及 = 不推。
