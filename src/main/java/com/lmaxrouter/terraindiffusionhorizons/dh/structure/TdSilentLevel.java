@@ -15,6 +15,7 @@ import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.biome.BiomeSource;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -24,9 +25,12 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.UpgradeData;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.ticks.LevelTickAccess;
+import net.minecraft.world.ticks.ScheduledTick;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -52,7 +56,7 @@ import net.minecraft.world.flag.FeatureFlagSet;
  *
  * <p><b>crash 驱动补面</b>: 未确认的接口面缺漏由 javac 编译错清单补全,
  * 运行期未用面按异常栈逐面填 — 设计稿既定工作流, 非缺陷. 桩面分两级:
- * no-op (事件/粒子类, 结构生成必不触) 与 UOE (tick/难度类, 触发即打方法名).</p>
+ * no-op (事件/粒子类, 结构生成必不触; tick 类 2026-11-21 转正: 液体方块放置必经调度, 改为静默丢弃 [长期记忆: 153]) 与 UOE (难度/光照类, 触发即打方法名).</p>
  *
  * <p>已知坑 (本类已防): ProtoChunk 五参构造的 sections 数组全 null,
  * 直接 setBlockState 会 NPE — setBlock 前按需补建 LevelChunkSection
@@ -307,21 +311,57 @@ public final class TdSilentLevel implements WorldGenLevel {
     public void gameEvent(GameEvent event, Vec3 position, GameEvent.Context context) {
     }
 
-    // ==== UOE 桩 (tick/难度/光照引擎: 触发即打方法名, crash 驱动信号) ====
+    // ==== tick 通道: 静默吞并 (原 UOE 绊线转正) [长期记忆: 153] ====
+    // 实跑实证 (2026-11-21): 模板放置含液体方块 (RuinedPortal 岩浆 / OceanRuin·Monument 水) 必经
+    // LiquidBlock.updateShape -> scheduleTick -> getFluidTicks; 沙砾类下落走 getBlockTicks;
+    // LevelAccessor.schedule 默认法构造 ScheduledTick 时还会取 nextSubTickCount.
+    // 三处 UOE 每次击杀整个 placeInChunk (首跑 22495 次). 哑 Level 一次性放置, 无 tick 循环,
+    // 调度进来也无从执行 -> 静默丢弃是唯一正确语义.
+    // 其余 UOE 桩 (难度/chunkSource/lightEngine) 继续当绊线, 触发即打方法名.
+
+    /** 静默 tick 容器: 调度静默丢弃, 查询一律 false/0 — 哑 Level 无未来, 不存在待执行 tick. [长期记忆: 153] */
+    private static final class SilentTickAccess<T> implements LevelTickAccess<T> {
+        @Override
+        public void schedule(ScheduledTick<T> tick) {
+            // 丢弃: 哑 Level 没有未来, 任何 tick 都不会被执行
+        }
+
+        @Override
+        public boolean hasScheduledTick(BlockPos pos, T type) {
+            return false;
+        }
+
+        @Override
+        public boolean willTickThisTick(BlockPos pos, T type) {
+            return false;
+        }
+
+        @Override
+        public int count() {
+            return 0;
+        }
+    }
+
+    /** 无状态单例, block/fluid 各一份 (泛型不同, 无法共用实例). */
+    private static final SilentTickAccess<Block> SILENT_BLOCK_TICKS = new SilentTickAccess<>();
+    private static final SilentTickAccess<Fluid> SILENT_FLUID_TICKS = new SilentTickAccess<>();
+
+    /** 同 tick 内调度排序去重契约 (ScheduledTick.subTickOrder): 车道单线程放置, 自增即唯一. */
+    private long subTickCount;
 
     @Override
     public long nextSubTickCount() {
-        throw new UnsupportedOperationException("TdSilentLevel.nextSubTickCount");
+        return ++subTickCount;
     }
 
     @Override
-    public net.minecraft.world.ticks.LevelTickAccess<net.minecraft.world.level.block.Block> getBlockTicks() {
-        throw new UnsupportedOperationException("TdSilentLevel.getBlockTicks");
+    public LevelTickAccess<Block> getBlockTicks() {
+        return SILENT_BLOCK_TICKS;
     }
 
     @Override
-    public net.minecraft.world.ticks.LevelTickAccess<net.minecraft.world.level.material.Fluid> getFluidTicks() {
-        throw new UnsupportedOperationException("TdSilentLevel.getFluidTicks");
+    public LevelTickAccess<Fluid> getFluidTicks() {
+        return SILENT_FLUID_TICKS;
     }
 
     @Override
