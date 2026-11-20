@@ -462,7 +462,7 @@ tag: TDH项目，勘误，bug根因
 tag: TDH项目，td情报，terrain-diffusion-mc
 <!-- END:103 -->
 <!-- ID:104 -->
-2026-11-16 TD RiverDecorator 材质真身(LOD表面审计案): TerrainDiffusionRiverDecorator(fork versions\1.20.1)在 buildSurface 后只处理水柱(挖床/填水/换河床材质/冻河盖冰), 干地列直接跳过不碰→河岸干地=vanilla default 产物=草, TDH 表 river 行 surface=sand 纯错. 河床材质 per-column 随机: strength<72 且 roll<96→sand, roll<38→clay, 其余→gravel; 砾石无处不在, 沙限弱水区(小溪), clay 少数(概率按 roll 均匀 0-255 假设, roll 实际范围未读). 冰面: patch<0.235→blue_ice, <0.365→packed_ice, 其余→ice(63.5%主导). 冻河判定=isFrozenRiver(biomeIndexes), 与 TDH frozen_river 冰盖同源. 坑: forge sources jar 只含 Forge 补丁类无 vanilla; vanilla 源码在 minecraft_user_repo 的 inject_src.jar; fork 多版本布局: LocalTerrainProvider 等跨版本核心在顶层 common, 版本特定在 versions\1.20.1.
+2026-11-16 TD RiverDecorator 材质真身(LOD表面审计案): TerrainDiffusionRiverDecorator(fork versions\1.20.1)在 buildSurface 后只处理水柱(挖床/填水/换河床材质/冻河盖冰), 干地列直接跳过不碰→河岸干地=vanilla default 产物=草, TDH 表 river 行 surface=sand 纯错. 河床材质 per-column 随机: strength<72 且 roll<96→sand, roll<38→clay, 其余→gravel; 砾石无处不在, 沙限弱水区(小溪), clay 少数(概率按 roll 均匀 0-255 假设, roll 实际范围未读). 冰面: patch<0.235→blue_ice, <0.365→packed_ice, 其余→ice(63.5%主导). 冻河判定=isFrozenRiver(biomeIndexes), 与 TDH frozen_river 冰盖同源. [2026-11-20 勘误] "vanilla 源码在 minecraft_user_repo 的 inject_src.jar" 指引错误: inject_src.jar 实测仅 1 条目 (mcp/client/Start.java); vanilla 全量源码真身 = F:\MOVED\.gradle\caches\neoformruntime\intermediate_results\decompile_*_output.jar (两个 hash 均可, ~8.2MB, forgeflower 反编译 Mojang 官方映射名, moddev 链产物, TDH 编译同链). "forge sources jar 只含 Forge 补丁类无 vanilla" 仍有效. fork 多版本布局: LocalTerrainProvider 等跨版本核心在顶层 common, 版本特定在 versions\1.20.1.
 tag: td情报，terrain-diffusion-mc，TDH项目，勘误
 <!-- END:104 -->
 <!-- ID:105 -->
@@ -629,3 +629,27 @@ tag: TDH项目，架构决策，B3, 裁决，视觉
 TDH 勘误 (2026-11-20 05:1x): .agent 三文件 2026-11-17 已由 max 定夺 (入库, .gitignore 不加 .agent/ 条目, GOAL-PLAN 案卷 grep "三文件定夺" 可查), 非悬案。我当日在裁决文档里误当悬案呈报并臆造 "待决策 5" 编号, 已双处勘误。根因: 只读 "待 max 决策" 节头 (当时仅 4 条) 就当全集, 没全文 grep, 漏掉散落在历史批次记录里的销案标记。规矩 (通用): 核对任何 "待决策/悬案/待办" 清单, 必须先全文 grep 关键词, 节头只是目录不是全集。另: 备忘录 "薪火相传" 原话语境是 PokerAgent 框架 .gitignore 模板设计, 与 TDH 项目定夺结论同向但不同案, 引用时注意分层。
 tag: TDH项目, 勘误, 教训, 待决策清单核对, 悬案
 <!-- END:139 -->
+<!-- ID:140 -->
+TDH B3/L3 边界裁决归档 (2026-11-20 max 拍板, 原话 "1干吧"): 甲案 — biome 过滤 (BF 滤) 并入 L3, B 批就地收口, B3 批号空缺。L3 (C 批) 完整主题 = BF 滤 + 组装 (Structure.generate → StructureStart → piece 盒 × 列折叠 → LOD 段) + 剪影可见层 (原 B3 视觉并入, 见 138)。同场销案: tdseedprobe (max "不用管"); 备忘录 tdh 分区 "审查硬编码,配置化" 维持备忘录不落 GOAL-PLAN。乙案落选理由: BF 滤单独成批无消费者 + 零视觉里程碑, 分析全文 docs/b3-l3-boundary-decision.md。push 未授权, 本地 commit 已落。
+tag: TDH项目, 架构决策, B3, L3, C批, biome过滤, 裁决
+<!-- END:140 -->
+<!-- ID:141 -->
+PokerAgent 解析器行为实测 (2026-11-20, 覆写修复上轮裸写标签符号被截断问题): ① exec 块漏 code 闭合标签时, 回执文案称"本指令及其后所有内容均未执行", 实测失败作用域仅畸形块本身, 下一个 cmd 块照常执行 — 排障以各块实际回执为准, 勿因首块报错假定后续全灭. ② 正文或指令内容里裸写中文方括号标签符号会把整条消息标签流撕碎: 内容处提前闭块(写入被截断), 孤儿闭合标签泄漏成"未知指令"假回执(一轮回执出现五个未知指令, remember/memory 内容虽成功写入但尾部标签泄漏成假指令). 铁律: 提及标签一律用英文方括号 [cmd] 形式或转义; 发送前全文搜一遍中文方括号; 记忆正文写"标签"二字但永不写符号本身.
+tag: PokerAgent, 坑, exec指令, 解析器行为
+<!-- END:141 -->
+<!-- ID:142 -->
+C1 侦查收口 (2026-11-20)。L3 蓝图核心事实 (1.20.1 mojmap 源码+javap 实证): ① biome 谓词构造 = CG.tryGenerateStructure 里 structure.biomes()::contains, 直传 structure.generate 第十参; 查询 = Structure.isValidBiome 单点 (GenerationStub.position → quart → biomeSource.getNoiseBiome → validBiome.test), 非网格扫描 ② locate 走全链 (getChunk(cx,cz,ChunkStatus.f_62315_), 推断=STRUCTURE_STARTS 未对照 SRG 表) → B2 oracle = superset 最终确认, L3 验证靶 = 与 locate 全量一致 ③ 多 entry 集合 5 个须复刻加权消元: mineshafts(2)/ocean_ruins(2)/shipwrecks(2)/villages(5)/ruined_portals(7), 全 w1; 循环 = setLargeFeatureSeed + nextInt 消元 + tryGenerate 失败移除重抽 (纯函数, 逐轮与谓词交互) ④ L3 谓词数据源 = 服务器活 structure registry 对象调 biomes() (tag #has_structure/* 已解析成 HolderSet, Forge 修改免费兼容), 不解析 json ⑤ 高度 = 活 generator (LevelLoad 已攥 ServerLevel → getChunkSource().getGenerator()) + beginFarLookup/endFarLookup 包裹 generate ⑥ ruined_portal_nether 在 overworld 集合, TD 源永不返回 nether biome → 谓词自动淘汰零特判 ⑦ 折损定性: 地表结构≈0; ancient_cities 类深地下结构 = TD 地下补丁模型 (deep_dark/lush/dripstone 按深度+区域噪声) vs vanilla 3D climate 偏差。TD 源 getNoiseBiome: quart 自转 block, sampler 参数忽略, DCL 线程安全。
+tag: TDH项目, terrain-diffusion-horizons, C批, L3, biome过滤, 结构, 悬案
+<!-- END:142 -->
+<!-- ID:143 -->
+NFRT 材料学地图 (2026-11-20 实证): F:\MOVED\.gradle\caches\neoformruntime\intermediate_results\ 下 — decompile_*.jar = SRG 名 (m_226596_) 源码; recompile_*.jar = mojmap 名 class (javap 直读); mergeWithSources_*.jar = mojmap 名源码 (探测中唯一 createStructures=True 的源码 jar, ChunkGenerator.java 已抽到 D:\temp\c1src\moj\)。拿 token 硬搜前必先验 jar 映射风格 (读文件头看方法名形状即可), 否则全零误判文件坏。SRG→mojmap 对照样本: m_226596_=generate, m_262864_=findValidGenerationPoint, m_262828_=isValidBiome, m_223198_=getNearestGeneratedStructure(RandomSpread), m_213609_=createStructures, m_223235_=getFirstOccupiedHeight, m_226585_=onTopOfChunkCenter。坑: 方法签名参数列表跨行时单行正则漏匹配 (createStructures 曾因此误判不存在)。
+tag: 坑, 字节码, neoformruntime, 材料学, mc模组, TDH项目, 技巧
+<!-- END:143 -->
+<!-- ID:144 -->
+TD fork (LMaxs 1.20.1) 结构搜索高度捷径 (2026-11-20 读源): FarLookupHeightMixin @Inject NoiseBasedChunkGenerator.iterateNoiseColumn HEAD + cancellable, LocalTerrainProvider.inFarLookup() 会话内 TD heightmap 直答起点高度; 折损 = 减 rivers/carving (结构放置不依赖); 水判定: stopsAtWater → max(surface, ScaledAltitude.SEA_LEVEL) + min/max build height clamp。会话开关 = ChunkGeneratorMixin terrainDiffusion$beginFarLookup/$endFarLookup, 签名 (ServerLevel, HolderSet<Structure>, ...) 吻合 findNearestMapStructure (推断挂 locate 头尾, 未读全文); TerrainDiffusionBiomeSource 内也有一对开关 (未定位宿主方法)。javadoc 量化: buried_treasure 半径100chunk 搜索 4万列噪声柱 = 分钟级服务器时间 → heightmap 直答。TD 世界 = vanilla NoiseBasedChunkGenerator (无自定义子类, grep 实证) + dimension_type 高800/min_y-64 + common mixins 10 个。任何离线结构生成 (L3): beginFarLookup() 包住 structure.generate 即得同款捷径。未读留 L3 首日: ChunkGeneratorMixin 全文 (javadoc 提 coarse map, locate 链 biome 查询疑有同款捷径)。
+tag: td情报, terrain-diffusion-mc, TDH项目, 结构, 高度, 悬案
+<!-- END:144 -->
+<!-- ID:145 -->
+vanilla worldgen json 解包固定位置 = D:\temp\van_wg_x (2026-11-20 从 TEST jar 重抽, 52 json = structure_set 19 + structure 33; 白名单 15 集合全在)。旧 %TEMP%\van_wg_x (489 biome json) = B3 tint 时代部分抽取, 从无 structure_set, %TEMP% 活不过几天, 已弃用不删。教训: 解包/取证产物不落 %TEMP%, 统一 D:\temp\<名>。源 jar = E:\MC\.minecraft\versions\TEST 1.20.1-Forge_47.4.10\TEST 1.20.1-Forge_47.4.10.jar (客户端 jar 内 worldgen json 原样)。
+tag: 坑, 教训, 测试环境, TDH项目, 材料学
+<!-- END:145 -->

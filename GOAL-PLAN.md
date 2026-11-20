@@ -471,3 +471,12 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - max 拍板 (原话 "1干吧,4随便,其他不用管"): 甲案 = BF 滤 (biome 过滤) 并入 L3, B 批就地收口, B3 批号空缺。L3 主题 = biome 过滤 + 组装 + 剪影可见层 (原 B3 视觉并入, [长期记忆: 138])。选项分析存档: docs/b3-l3-boundary-decision.md。
 - 同场销案: tdseedprobe 悬案 (max "不用管"); 备忘录 tdh 分区 "审查硬编码,配置化" 维持备忘录不动。
 - commit 授权 "随便" = 本轮自行落; push 未提及 = 不推。
+## 2026-11-20 22:4x · C1 侦查收口 (L3 开工前)
+
+- 主题: L3 (BF 滤 + 组装 + 剪影) 开工前侦查, 全结论 docs/c1-recon.md; 长期记忆 142–145
+- 三问: ① biome 谓词 = Structure.isValidBiome 单点查询 (起点→quart→getNoiseBiome→test), 构造 = structure.biomes()::contains 直传 generate 第十参 ② locate 走全链 → B2 oracle = superset 最终确认, L3 靶 = 与 locate 全量逐位一致 ③ Structure.generate 十参全 public, GenerationContext record 直构, 每 chunk 独立 random 流 (可并行)
+- 增量: 多 entry 集合 5 个 (villages 5 / ruined_portals 7 / mineshafts·ocean_ruins·shipwrecks 各 2) 须复刻 setLargeFeatureSeed 加权消元, 逐轮与谓词交互, 全 w1 不免复刻; 谓词数据源 = 活 structure registry 对象 (tag 已解析, Forge 修改免费兼容); 高度权威 = 活 generator (LevelLoad 攥 ServerLevel) + beginFarLookup 会话 (fork 现成捷径: iterateNoiseColumn → TD heightmap 直答; 折损 = rivers/carving); ruined_portal_nether TD 源永不返回 nether → 自动淘汰
+- 折损分层: 地表结构 ≈ 0; ancient_cities 类 = TD 地下补丁 (deep_dark/lush/dripstone) vs vanilla 3D climate 偏差 (未量化); TD 源 quart 自转 block / sampler 忽略 / DCL / tile 外 default→PLAINS
+- 材料学: NFRT 三类 jar 地图 (decompile=SRG 源码 / recompile=mojmap class / mergeWithSources=mojmap 源码; CG.java 抽至 D:\temp\c1src\moj); vanilla worldgen json 固定落 D:\temp\van_wg_x (52 json); 坑: 跨行签名漏匹配 + token 搜前验 jar 映射风格
+- L3 首日材料 (未读非决策): ChunkGeneratorMixin 全文 (locate 链 biome 疑有 coarse map 捷径, 影响 L3 预热设计) / TDBS 内 far-lookup 开关宿主方法
+- 本轮本地 commit (不 push); push 时机归 max
