@@ -284,6 +284,7 @@ widthInColumns 参数保留 (dl>0 时列宽 2^dl, 未来扩展); 建议同时在
   全部零副作用恢复, 教训入 memory 099/100。
 - .gitignore 工作区损毁 (注释丢失/条目丢失/粘连; 非本会话所改, 疑框架手笔), 未 commit 未恢复, 待 max 定夺;
   副作用: libs/ 与 build-last.log 脱离忽略名单 (status 挂未跟踪)。
+
 ## 2026-11-16 凌晨 · 案②α 表面审计全案 (侦查关门, 8 项待 max 拍板, 未动一行)
 
 ### W 水判定双嫌疑 (必修)
@@ -341,6 +342,7 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 ### 其他遗留
 - chunk 强制薄流层 LOD 缺失 = 已知损失, 不追
 - .gitignore 工作区损毁 (前轮遗留, 待 max 定夺)
+
 ## 2026-11-16 早晨 · 案②α 审计执行落地 (8 项全批, 已部署 TEST 待重测)
 
 ### 执行记录
@@ -412,6 +414,7 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 2026-11-18 两起: remember 标签损坏 → 短期记忆被清空后重建 (长期记忆 120); recon10 PowerShell 末行引号 typo → 脚本解析失败零输出, 重发修正。教训: 多行指令发出前核对标签配对与引号闭合。
 - 2026-11-17 五起 (自动模式): ①构建裸跑漏 TD_MIRROR 四件套 (三犯, 089 剧本重演, 白耗一轮) ②README 中文河床条目措辞照代码注释脑补 (锚了未读区间) → replace miss ③两处行中子串当锚 (replace 匹配单位 = 整行) → miss ④树冠段抬 coverTop 未同步水段条件 → 水膜 bug, commit 前读全列循环自查抓获 ⑤日期漂移: 本案卷早期条目标 11-18, 系统时钟与文件系统 (jar mtime) 实证 11-17, 新条目以 11-17 为准 (旧条目不追改, 处置归 max)。教训: 未读区间不锚; 行锚必须整行; 语义改动前通读受影响函数全文。
 - 2026-11-17 六起+讽刺一击: 发明不存在的 write 指令 (14 行全被当独立指令拒绝, 零副作用), 正主是 create; 且本条第一次补录时又拿行中子串当锚 miss — 写 "行锚必须整行" 教训的人自己犯之, 二次用整行锚才落。教训: 拿不准的指令名先 @@help fast; 锚, 整行, 无例外。
+
 ## 2026-11-18 · A批 L1 植被虚拟树格重构 (aad924c, 已部署 TEST 待重测)
 
 - 旧 density 观感表退役 (回收站可恢复), 数据全源重推: vanilla worldgen json 三目录 (biome/placed/configured) + javap 类常量 (蘑菇茎/竹竿高/竹噪声).
@@ -426,6 +429,7 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 车道 = 计算核心 (纯函数 region→段) + 调度外壳 (async 开关; false = 生成线程内联, 零等待原语); 缓存表 = 车道与 generate 唯一交界面.
 - 里程碑: B1 骨架+两 async 键 → B2 oracle 撒点+locate 对照 → B3 视觉 (甲=不渲染等 L3 [推荐] / 乙=锚点色块, 呈 max 裁决).
 - 待验 5 项见设计稿 §7 (B1 首件事 = DH 刷新 API javap). create 渠道截断事故: 头部 §0-3 未落盘 (3845 字符刀口), 分段补写中.
+
 ## B批: 异步车道 / L2 结构撒点 / TOML 配置 (2026-11-18 启动)
 
 立项令 (max 2026-11-17, 逐字存档 [长期记忆: 123]): 结构和地物 LOD 与地形 LOD 分开不阻塞; 快的就快跑, 慢的就慢慢跑; 结构/地物异步单独两个配置项; 配置改 TOML 带注释; 挪进 config/terrain-diffusion-mc/; 关了 = 同步模式 (地形 LOD 生成前等地物结构全跑完才显示); 默认开.
@@ -471,6 +475,7 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - max 拍板 (原话 "1干吧,4随便,其他不用管"): 甲案 = BF 滤 (biome 过滤) 并入 L3, B 批就地收口, B3 批号空缺。L3 主题 = biome 过滤 + 组装 + 剪影可见层 (原 B3 视觉并入, [长期记忆: 138])。选项分析存档: docs/b3-l3-boundary-decision.md。
 - 同场销案: tdseedprobe 悬案 (max "不用管"); 备忘录 tdh 分区 "审查硬编码,配置化" 维持备忘录不动。
 - commit 授权 "随便" = 本轮自行落; push 未提及 = 不推。
+
 ## 2026-11-20 22:4x · C1 侦查收口 (L3 开工前)
 
 - 主题: L3 (BF 滤 + 组装 + 剪影) 开工前侦查, 全结论 docs/c1-recon.md; 长期记忆 142–145
@@ -480,3 +485,20 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 材料学: NFRT 三类 jar 地图 (decompile=SRG 源码 / recompile=mojmap class / mergeWithSources=mojmap 源码; CG.java 抽至 D:\temp\c1src\moj); vanilla worldgen json 固定落 D:\temp\van_wg_x (52 json); 坑: 跨行签名漏匹配 + token 搜前验 jar 映射风格
 - L3 首日材料 (未读非决策): ChunkGeneratorMixin 全文 (locate 链 biome 疑有 coarse map 捷径, 影响 L3 预热设计) / TDBS 内 far-lookup 开关宿主方法
 - 本轮本地 commit (不 push); push 时机归 max
+
+## 2026-11-21 凌晨 · C 批完工静审 + fork 禁用案破案 (max 睡眠期间自动模式)
+
+- C 批代码落地: L3 结构组装管线五件套 (StructureSetParams/SpreadCore/Context/SilentLevel/AssembleCore), commit 0790b59 [长期记忆: 146]; 链条: 753154f 侦查 → 3a210bd 设计稿 → 0790b59 实现, 全部 local 未 push (push 时机归 max)。jar 已部署 TEST mods (11/21 00:22)。
+- fork 禁用案破案 [长期记忆: 148/149]: 11/19 三连 crash = 环境事故 (terrain-diffusion-models 路径当时为非目录体, Files.createDirectories 抛 FileAlreadyExists), 20:18 后已手动修复, 21:00 与 11/20 02:08 双会话模型 SHA 全 verified 实证; fork 源码 crash 后零改动。fork 被禁 = 02:18 收工后 TD 全家清场 (fork + 旧 horizons jar 双 zip 化), 与 crash 无因果, 解禁风险 ≈ 0。
+- config 兼容排查: B2 时代播种 toml (11/20 02:08) 无 C 批新键 [structure] pad_chunks, night-config getOrElse 默认 16 宽容生效, 无害 [长期记忆: 150]; 若要新键带注释可见, 启动前删 toml 重播种 (当前文件全默认值零手改, 零损失)。
+- 勘误 (协作质量): 曾据静态 import 判"不解禁启动即 NoClassDefFoundError", 实为主类 ModList.isLoaded 双守卫 → fork 缺席时 horizons 哑火不崩 (白跑一次, 日志可见 Terrain Diffusion=false) [长期记忆: 148]。
+- 四决策悬置归 max: ① fork 解禁 (mods 下 rename 回 .jar) ② push 三 commit (DNS 污染环境, gh-cli 旁路待选) ③ mods 尸体清理 (.jar.zip 57696B 旧 B2 + .bak-20261118) ④ 实跑时机。
+- 实跑 SOP 要点: 建议新世界 (防旧 DH LOD 缓存遮蔽) + 日志观察 + locate 对照 (与 B2 验收同构); 观察点细则实跑当轮重出 (含 C 批首验项: 结构剪影视觉 — B2 零视觉, 本批首次可见)。
+
+## 2026-11-21 凌晨 · C批首跑验尸 + tick 通道根因修复 (23a36f1)
+
+- 首跑实况 (world 15, 02:16-02:40): 管线全绿 (15 集合/28 entry/assemble 3709 region/0 ERROR 0 黑名单), 汇总 = 命中 132365 / 组装 27210 / 列段 920581, DH sqlite 90MB 落盘; 视觉验收未完成 (0 条 /locate, 剪影未问出).
+- 根因: placeInChunk 失败 22495 次 (~45% 放置全灭) = TdSilentLevel tick 族 UOE 被液体方块踩爆 (模板放液体 → LiquidBlock.updateShape → scheduleTick → getFluidTicks UOE → 整 chunk 放置报废); 种类 = OceanRuin 10820 / Monument 8784 / Jigsaw(村庄) 1814 / RuinedPortal 975 / SwampHut 102; 日志洪水 65MB = 22495 异常 × ~19 行栈帧, 账全平; B2 冒烟无液体结构 → 绊线零响放行, 绊线设计本身无罪.
+- 修复 (23a36f1, 已部署 TEST 78742B): SilentTickAccess<T> 嵌套类 (schedule 吞 / hasScheduledTick·willTickThisTick false / count 0), block+fluid 双通道单例 (沙砾下落走 block 通道), nextSubTickCount 改自增 long (ScheduledTick 构造参数层, 车道单线程下自增即唯一); 官方映射名 recompile_1ab23873 jar javap 实证; 难度/chunkSource/lightEngine UOE 留作绊线.
+- 待重测: 直接进 world 15 不删 sqlite (车道会话级重算覆写; 残影则删 DistantHorizons.sqlite 重进); 靶 = placeInChunk 归零 / 列段 92 万跳升 / 日志回 MB 级 / 村庄剪影.
+- push 冻结: ahead 13 / behind 2; 远端 = [English] 锚 + issue 260 链接共 4 行, 与本地 README 头部擦碰待解, max 验收后 rebase+push.
