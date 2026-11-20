@@ -8,6 +8,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.Difficulty;
+import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.storage.LevelData;
 import net.minecraft.world.level.entity.EntityTypeTest; // entity 子包 [EntityGetter import 块实证]
@@ -345,6 +346,8 @@ public final class TdSilentLevel implements WorldGenLevel {
     /** 无状态单例, block/fluid 各一份 (泛型不同, 无法共用实例). */
     private static final SilentTickAccess<Block> SILENT_BLOCK_TICKS = new SilentTickAccess<>();
     private static final SilentTickAccess<Fluid> SILENT_FLUID_TICKS = new SilentTickAccess<>();
+    /** 实体难度快照: Difficulty(NORMAL, dayTime=0, gameTime=0, moonPhase=0); 构造器签名 recompile jar javap 实证. [长期记忆: 154] */
+    private static final DifficultyInstance SILENT_DIFFICULTY = new DifficultyInstance(Difficulty.NORMAL, 0L, 0L, 0.0F);
 
     /** 同 tick 内调度排序去重契约 (ScheduledTick.subTickOrder): 车道单线程放置, 自增即唯一. */
     private long subTickCount;
@@ -365,8 +368,8 @@ public final class TdSilentLevel implements WorldGenLevel {
     }
 
     @Override
-    public net.minecraft.world.DifficultyInstance getCurrentDifficultyAt(BlockPos pos) {
-        throw new UnsupportedOperationException("TdSilentLevel.getCurrentDifficultyAt");
+    public DifficultyInstance getCurrentDifficultyAt(BlockPos pos) {
+        return SILENT_DIFFICULTY; // [长期记忆: 154] 实体链 finalizeSpawn 参数求值位必经 (decompile 5 现场实证); 哑世界实体即蒸发, 快照数值无副作用面
     }
 
     @Override
