@@ -502,3 +502,11 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 修复 (23a36f1, 已部署 TEST 78742B): SilentTickAccess<T> 嵌套类 (schedule 吞 / hasScheduledTick·willTickThisTick false / count 0), block+fluid 双通道单例 (沙砾下落走 block 通道), nextSubTickCount 改自增 long (ScheduledTick 构造参数层, 车道单线程下自增即唯一); 官方映射名 recompile_1ab23873 jar javap 实证; 难度/chunkSource/lightEngine UOE 留作绊线.
 - 待重测: 直接进 world 15 不删 sqlite (车道会话级重算覆写; 残影则删 DistantHorizons.sqlite 重进); 靶 = placeInChunk 归零 / 列段 92 万跳升 / 日志回 MB 级 / 村庄剪影.
 - push 冻结: ahead 13 / behind 2; 远端 = [English] 锚 + issue 260 链接共 4 行, 与本地 README 头部擦碰待解, max 验收后 rebase+push.
+
+## 2026-11-21 清晨 · C批修复#2: 难度通道 (实体结构 finalizeSpawn 参数求值位)
+
+- 二验数字 (placeInChunk 失败 22495→8329): RuinedPortal 975→0, tick UOE 归零 = 修复#1 实锤生效; 残余失败全为实体结构 (OceanRuin 3821 / Jigsaw 2597 / Monument 1905 / SwampHut 6), 根因 = getCurrentDifficultyAt UOE.
+- 根因链 (decompile 5 现场实证): Mob.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), STRUCTURE, ...) 参数求值位 — Monument 远古守卫者 L1446 / OceanRuin 溺尸 L197 / SwampHut 女巫 L96+猫 L115 / WoodlandMansion L1056 / StructureTemplate 实体处理器 L404 (Jigsaw 村庄村民走此路).
+- 修复: getCurrentDifficultyAt 返回静态 DifficultyInstance(NORMAL, 0, 0, 0) 快照 (构造器签名 recompile jar javap 实证); 难度值只影响 AI/掉落/装备, 哑世界实体蒸发无副作用面.
+- "看不出区别"结案: DH realTimeUpdate 半径 256 chunks = 4096 格 > 最远村庄 3967 格, 渲染距离无罪; 主因 = 结构仍在第二层洋葱皮死亡.
+- LevelWriter.addFreshEntity 状态: 本轮 javap 验明 (若 default false = 实体蒸发链天然闭合, 无需实现).
