@@ -66,6 +66,8 @@ public final class TdConfig {
     /** [structure] 结构车道异步: true = 地形 LOD 先发布, 车道后台算完刷新补全;
      *  false = 同步模式, generate 调用栈内联, 地形 LOD 扣住等车道算完才显示 (一次成型无闪烁). */
     public boolean structureAsync = true;
+    /** [structure] 扫描外扩 (chunk; L3 组装: bbox 跨 region 界的结构防截断; 默认 16 = 256 块 >= mansion 尺度). */
+    public int structurePadChunks = 16;
 
     /** [features] 地物车道总开关 (L3/L4 真地物载荷占位; L1 花草色斑是同步快路径, 开关在 [vegetation] 段). */
     public boolean featuresEnabled = true;
@@ -132,6 +134,8 @@ public final class TdConfig {
         // [B1] 车道四键 (缺键/类型不符 = 默认值)
         cfg.structureEnabled = c.getOrElse(List.of("structure", "enabled"), Boolean.TRUE);
         cfg.structureAsync = c.getOrElse(List.of("structure", "async"), Boolean.TRUE);
+        // [L3] 组装扫描外扩 (chunk): bbox 跨 region 界的结构防截断 (默认 16 = 256 块 >= mansion 尺度)
+        cfg.structurePadChunks = c.getOrElse(List.of("structure", "pad_chunks"), 16);
         cfg.featuresEnabled = c.getOrElse(List.of("features", "enabled"), Boolean.TRUE);
         cfg.featuresAsync = c.getOrElse(List.of("features", "async"), Boolean.TRUE);
         // overrides: 子表 [terrain.surfaceBlockOverrides]; 缺失/类型不符 = 空 map

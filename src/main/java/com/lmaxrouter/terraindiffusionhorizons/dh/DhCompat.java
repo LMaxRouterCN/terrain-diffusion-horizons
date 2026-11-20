@@ -5,6 +5,8 @@ import com.lmaxrouter.terraindiffusionhorizons.TdConfig;
 import com.lmaxrouter.terraindiffusionhorizons.TerrainDiffusionHorizons;
 import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LaneManagers;
 import com.lmaxrouter.terraindiffusionhorizons.dh.structure.StructureSetParams;
+import com.lmaxrouter.terraindiffusionhorizons.dh.structure.TdStructureAssembleCore;
+import com.lmaxrouter.terraindiffusionhorizons.dh.structure.TdStructureContext;
 import com.lmaxrouter.terraindiffusionhorizons.dh.structure.TdStructureSpreadCore;
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.api.interfaces.world.IDhApiLevelWrapper;
@@ -66,12 +68,15 @@ public final class DhCompat {
                 }
                 DhRefreshHook.INSTANCE.unbind();
                 TdStructureSpreadCore.INSTANCE.clearParams();
+                TdStructureContext.clear();
                 LaneManagers.onLevelUnloadAll();
             }
         });
         // [B2] 车道装配: 撒点核心进 structure 车道; 刷新钩子挂两车道
         // (features 车道 L3/L4 再塞核心, 钩子先挂上保持对称)
         LaneManagers.structure().addCore(TdStructureSpreadCore.INSTANCE);
+        // [L3] 组装核心进 features 车道 (撒点命中 -> 消元 -> generate -> placeInChunk -> 列折叠)
+        LaneManagers.features().addCore(TdStructureAssembleCore.INSTANCE);
         LaneManagers.structure().setRefreshHook(DhRefreshHook.INSTANCE);
         LaneManagers.features().setRefreshHook(DhRefreshHook.INSTANCE);
         TerrainDiffusionHorizons.LOG.info("DH 兼容层已挂钩 (LevelLoad/Unload 事件监听中)");
@@ -100,7 +105,10 @@ public final class DhCompat {
             DhRefreshHook.INSTANCE.bind(coreWrapper);
         }
         // [B2] 撒点参数装配: vanilla structure_set json -> 不可变快照 (含装配日志)
-        TdStructureSpreadCore.INSTANCE.updateParams(readStructureSets(serverLevel));
+        // [L3] 同表喂组装上下文 (entries 解析 + generate 十参活对象), 组装车道消费
+        Map<String, StructureSetParams> setTable = readStructureSets(serverLevel);
+        TdStructureSpreadCore.INSTANCE.updateParams(setTable);
+        TdStructureContext.assemble(serverLevel, setTable);
         TdDhWorldGenerator generator = new TdDhWorldGenerator(levelWrapper, worldSeed);
         // DhApiResult 吞返回值打日志, 注册失败可见 (重复注册/无效 level 等场景)
         var result = DhApi.worldGenOverrides.registerWorldGeneratorOverride(levelWrapper, generator);

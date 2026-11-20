@@ -6,6 +6,8 @@ import com.github.xandergos.terraindiffusionmc.world.HeightConverter;
 import net.minecraft.world.level.biome.Biome;
 import com.lmaxrouter.terraindiffusionhorizons.TdConfig;
 import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LaneManagers;
+import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LanePayload;
+import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LaneSegment;
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.api.enums.worldGeneration.EDhApiDistantGeneratorMode;
 import com.seibel.distanthorizons.api.enums.worldGeneration.EDhApiWorldGenerationStep;
@@ -21,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -59,6 +62,8 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
     private ColumnStyle fallbackStyle;
     /** 案②α: 群系 key -> 列表面样式缓存 (DH 池多线程; 并发重复构造等价无害). */
     private final ConcurrentHashMap<String, ColumnStyle> styleCache = new ConcurrentHashMap<>();
+    /** [L3] 结构方块 wrapper 缓存 (Optional 哨兵: CHM 不容 null value, empty = 获取失败不重试). */
+    private final ConcurrentHashMap<String, Optional<IDhApiBlockStateWrapper>> structWrapperCache = new ConcurrentHashMap<>();
 
     public TdDhWorldGenerator(IDhApiLevelWrapper levelWrapper, long worldSeed) {
         this.levelWrapper = levelWrapper;
@@ -149,8 +154,9 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         // ==== [B1] 车道骨架占位: cores 空表全短路, 行为与 A 批完全一致 ====
         // B2 塞入 LaneCore 后激活: async=true 地形 LOD 先行, 车道后台补算 + 刷新;
         // async=false generate 调用栈内联一次成型; 返回段 B3 合并点消费 (设计稿 §2/§3/§5)
-        LaneManagers.structure().pollOrSubmit(expectedSeed, detailLevel, posX, posZ);
-        LaneManagers.features().pollOrSubmit(expectedSeed, detailLevel, posX, posZ);
+        LaneManagers.structure().pollOrSubmit(expectedSeed, detailLevel, posX, posZ); // [L2] 撒点载荷 (坐标事实, 日志/调试通道)
+        // [L3] features 车道 = 结构组装载荷 (LaneSegment 列段); 命中/同步算得返回列表, 异步首算 null (地形 LOD 先行, 算完刷新补全)
+        List<LanePayload> structPayloads = LaneManagers.features().pollOrSubmit(expectedSeed, detailLevel, posX, posZ);
 
         // ==== TD 查询 (块坐标, i=Z j=X) ====
         // 案②α: withBiomes 门控 (内存 ~520MB vs ~150MB, TEST 实测; config 关掉即退纯几何模式)
@@ -197,6 +203,27 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         float[] waterSurf = data.waterSurface; // 水面海拔米 (可能为 null)
         short[] biomeIdx = withBiomes ? data.biomeIndexes : null; // 案②α: 群系索引 (withBiomes=true 时非 null)
 
+        // ==== [L3] 结构段索引: features 车道载荷 -> 列顶段 (世界块坐标 -> 数据源局部) ====
+        // b = [Z起, X起, Z止, X止] (dataSourceBlockBounds 返回序); 同列多段取 topY 最高者 (顶盖语义, 重叠结构罕见);
+        // 越界弃 = AssembleCore 已 clip region 界的防御双保险
+        LaneSegment[] structSegs = new LaneSegment[cols * cols];
+        if (structPayloads != null) {
+            for (LanePayload p : structPayloads) {
+                if (!(p instanceof LaneSegment seg)) {
+                    continue; // 非方块段载荷 (防御: features 车道现仅产 LaneSegment)
+                }
+                int lx = seg.blockX() - b[1];
+                int lz = seg.blockZ() - b[0];
+                if (lx < 0 || lx >= cols || lz < 0 || lz >= cols) {
+                    continue;
+                }
+                int li = lx * cols + lz;
+                LaneSegment cur = structSegs[li];
+                if (cur == null || seg.topY() > cur.topY()) {
+                    structSegs[li] = seg;
+                }
+            }
+        }
         for (int x = 0; x < cols; x++) {
             for (int z = 0; z < cols; z++) {
                 int idx = TdLodTranslator.sampleIndex(x, z, width);
@@ -424,6 +451,20 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                 if (waterCol && coverTop > solidTop) {
                     points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, coverTop, style.iceCover ? iceBlock : waterBlock, style.biome));
                 }
+                // ==== [L3] 结构段接管列顶 (C 批合并点; 设计稿 batch-c-design §2.6) ====
+                // sseg.topY = 顶块上界 (半开) -> 相对列高 sTop = topY - minY; 高于当前覆盖面才发段:
+                // 水下结构矮于水面 = 海面语义保持 (monument 视觉顶=海面); 埋地矮于 solidTop = 不可见, 均自然跳过
+                LaneSegment sseg = structSegs[x * cols + z];
+                if (sseg != null) {
+                    int sTop = clampY(sseg.topY() - minY, dataBottom, maxY);
+                    if (sTop > coverTop) {
+                        IDhApiBlockStateWrapper sw = structWrapper(sseg.blockId());
+                        if (sw != null) {
+                            points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, coverTop, sTop, sw, style.biome));
+                            coverTop = sTop; // 尾段 air 自结构顶起 (DH 段堆叠不变量, 帽段事故教训同源)
+                        }
+                    }
+                }
                 if (coverTop < maxY) {
                     points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, coverTop, maxY, airBlock, style.biome));
                 }
@@ -440,6 +481,18 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
     /** y 边界钳制 (TD 极值理论上可达 ~396, 越界列截断到维度高度域). */
     private static int clampY(int v, int min, int max) {
         return v < min ? min : Math.min(v, max);
+    }
+
+    /** [L3] 结构方块 wrapper 懒取 (Optional 缓存: 失败只警一次不重试; 竞态重复构造等价无害). */
+    private IDhApiBlockStateWrapper structWrapper(String blockId) {
+        return structWrapperCache.computeIfAbsent(blockId, id -> {
+            try {
+                return Optional.ofNullable(DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(id, levelWrapper));
+            } catch (Exception e) {
+                LOG.warn("结构方块 wrapper 获取失败: {}: {}", id, e.toString());
+                return Optional.empty();
+            }
+        }).orElse(null);
     }
 
     /** splitmix64 弱哈希终轮: 树格/竹列确定性随机的充分混合 (无状态, 线程安全). */

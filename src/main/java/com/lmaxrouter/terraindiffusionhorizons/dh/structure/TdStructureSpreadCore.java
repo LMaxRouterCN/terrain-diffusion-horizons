@@ -17,6 +17,8 @@ import java.util.Map;
 /**
  * 结构撒点核心 (B2 载荷; 设计稿 docs/batch-b-design.md §4.3, 种子链实证 [长期记忆: 115]).
  *
+ * <p>[L3 扩展 2026-11-21] compute 的界计算抽为 public computeRange (chunk 双闭界):
+ * 撒点行为零变; 组装核心 (TdStructureAssembleCore) 以外扩扫描界调用得 hits.</p>
  * <p><b>零复刻原则</b>: 撒点数学直调 vanilla 本尊 (WorldgenRandom / LegacyRandomSource /
  * setLargeFeatureWithSalt / setLargeFeatureSeed / RandomSpreadType.evaluate 全 public),
  * 341873128712 一类混合常量一行不抄 — 本类只写编排层 (格枚举 / 频率分发 / 排除区循环),
@@ -58,22 +60,29 @@ public final class TdStructureSpreadCore implements LaneCore {
 
     @Override
     public List<LanePayload> compute(long worldSeed, byte detailLevel, int posX, int posZ) {
+        // region chunk 界 (含端点) — 界计算抽 computeRange 后的纯转发, 撒点行为零变 (B2 冒烟不回归)
+        int shift = detailLevel + 2; // 数据源边长 2^(dl+6) 块 = 2^(dl+2) chunk
+        int chunkMinX = posX << shift;
+        int chunkMinZ = posZ << shift;
+        return new ArrayList<>(computeRange(worldSeed, chunkMinX, chunkMinZ,
+                chunkMinX + (1 << shift) - 1, chunkMinZ + (1 << shift) - 1));
+    }
+
+    /**
+     * 界定撒点: chunk 双闭界 [min, max] 内的全部命中 (含端点).
+     * L3 组装核心的输入 — 界 = region 界外扩 padChunks 的扫描界 (设计稿 batch-c-design §3.5);
+     * 抽取自原 compute, 枚举与判定逻辑零改动.
+     */
+    public List<StructureHit> computeRange(long worldSeed, int chunkMinX, int chunkMinZ, int chunkMaxX, int chunkMaxZ) {
         Map<String, StructureSetParams> table = params;
         if (table.isEmpty()) {
             return List.of(); // 未装配 (非 TD 世界 / 装配失败): 静默空载荷, 装配日志在 DhCompat
         }
-        // region chunk 界 (含端点)
-        int shift = detailLevel + 2; // 数据源边长 2^(dl+6) 块 = 2^(dl+2) chunk
-        int chunkMinX = posX << shift;
-        int chunkMinZ = posZ << shift;
-        int chunkMaxX = chunkMinX + (1 << shift) - 1;
-        int chunkMaxZ = chunkMinZ + (1 << shift) - 1;
-
-        List<LanePayload> hits = new ArrayList<>();
+        List<StructureHit> hits = new ArrayList<>();
         for (Map.Entry<String, StructureSetParams> e : table.entrySet()) {
             StructureSetParams p = e.getValue();
             int sp = p.spacing();
-            // 格枚举界: potential = g*sp + off, off ∈ [0, sp) -> 覆盖 region 的格在
+            // 格枚举界: potential = g*sp + off, off ∈ [0, sp) -> 覆盖扫描界的格在
             // [floorDiv(min-(sp-1), sp), floorDiv(max, sp)]; 各放宽 1 格做安全垫 (代价微忽)
             int gMinX = Math.floorDiv(chunkMinX, sp) - 1;
             int gMaxX = Math.floorDiv(chunkMaxX, sp) + 1;
@@ -83,7 +92,7 @@ public final class TdStructureSpreadCore implements LaneCore {
                 for (int gz = gMinZ; gz <= gMaxZ; gz++) {
                     ChunkPos pc = potentialChunk(p, worldSeed, gx, gz);
                     if (pc.x < chunkMinX || pc.x > chunkMaxX || pc.z < chunkMinZ || pc.z > chunkMaxZ) {
-                        continue; // 该格 potential 落在 region 外
+                        continue; // 该格 potential 落在扫描界外
                     }
                     // potential 命中由构造保证; 完整判定 (频率+排除区) 走同一 helper,
                     // 与排除区递归共用单一代码路径 = 语义与 vanilla 逐点一致
