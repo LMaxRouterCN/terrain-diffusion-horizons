@@ -9,7 +9,8 @@ run/
 .vscode/
 .settings/
 .classpath
-.project
 bin/
+libs/
+*.log
 libs/
 build-last.log

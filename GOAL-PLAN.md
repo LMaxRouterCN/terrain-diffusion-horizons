@@ -510,3 +510,13 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 修复: getCurrentDifficultyAt 返回静态 DifficultyInstance(NORMAL, 0, 0, 0) 快照 (构造器签名 recompile jar javap 实证); 难度值只影响 AI/掉落/装备, 哑世界实体蒸发无副作用面.
 - "看不出区别"结案: DH realTimeUpdate 半径 256 chunks = 4096 格 > 最远村庄 3967 格, 渲染距离无罪; 主因 = 结构仍在第二层洋葱皮死亡.
 - LevelWriter.addFreshEntity 状态: 本轮 javap 验明 (若 default false = 实体蒸发链天然闭合, 无需实现).
+
+## 2026-11-21 上午 · C批·C-light 多段折叠 + B案贴地换色
+
+- 动机: C 批首跑列段 92 万落盘但视觉 = 通天单色柱 (旧 columnTop 单段: 整列首块色, 腿/内腔/层全糊); 路/农田埋地无观感 (表面段与结构段零交互).
+- C-light 折叠端 (AssembleCore.columnTop 全重写): 自顶向下单趟状态机 — 空气/structure_void 闭合段; 同块延伸; 异块且名额内 (segCount+1 < limit) 闭合+开新; 名额尽吞底 (块色保持段首, 保高不浮空); 空 section = 16 格空气同闭合 (塔尖/柱基同 id 不跨 section 误并); 列底 flush. limit = structureColumnSegments (默认 6); **limit=1 恰好复现旧单段 = 配置级回滚开关**. runBlock 用 Block 单例 ==, id 仅 emit 时取.
+- 消费端 (TdDhWorldGenerator): structSegs 改 List[cols*cols] 列链 (dl0 块坐标与数据点 1:1 — TdLodTranslator 实证; 曾疑 dl>0 块偏移越界丢段, 证伪: 声明 [0,0] + 守卫拦非 dl0). 平铺: 倒读自底向上, sTop<=coverTop 跳过 (埋地/水下), 截断裁剪, 缝隙 air 垫 (DH 段堆叠不变量), wrapper 失败段降级 air.
+- B 案贴地换色: 列内首个 segTop <= solidTop 段, 差 <= surfaceBlendDepth (默认 3, 负=关) → 表面 1 格结构色, 床段拆两截; 换色列禁花草帽 (修麦田混花); 水列不换 (海面语义, 沉船归 D 案). 白捡: 灯柱 = fence+torch 帽, 女巫小屋分层.
+- 构建+部署: BUILD SUCCESSFUL 24s (唯一警告 = 树格遗留 BIOME_INFO_NOISE 有意 deprecation); jar 79828B 部署 TEST mods, MD5 双绿.
+- 风险登记: wheat/cross 段抬列高 = 帽段事故同族 (cherry 14% 命中 → quad +56% → FPS 500→300 实测), 农田集区可能同量级; 备选 = cross 压制配置.
+- 待实测 7 项: 小屋分层 / 灯柱 / 路色带 / 农田 wheat / 树两段 / FPS / 回滚开关. 实测路径归 max: A = 删 world15 库重算 / B = 新世界. TEST toml 已预置三键 (pad_chunks/column_segments/surface_blend_depth, 全默认值零行为变更), [structure] 段头注释同步正名 (旧文还停在"B1 骨架占位").

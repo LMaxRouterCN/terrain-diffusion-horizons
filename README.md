@@ -70,14 +70,34 @@ TDH 针对 DH 3.3.3 开发并实测通过。其余版本未测试。
 | `terrain.useBiomeSurface` | `true` | 群系驱动表面；false 退纯几何模式 |
 | `terrain.surfaceBlockOverrides` | `{}` | 群系 key → 方块 ID 稀疏覆盖，只覆地表字段 |
 | `vegetation.coloring` | `true` | L1 植被树冠近似（干列按群系密度叠树冠段） |
+| `vegetation.grassColoring` | `false` | 草丛色斑留口（默认关：草丛与草方块共用 grass colormap） |
+| `structure.enabled` | `true` | 结构 LOD 车道总开关（同源撒点 + L3 组装） |
+| `structure.async` | `true` | 异步：地形 LOD 先出图，结构算完自动刷新补全 |
+| `structure.pad_chunks` | `16` | 扫描外扩（chunk），bbox 跨 region 的结构防截断 |
+| `structure.column_segments` | `6` | 列折叠段数上限；`1` = 旧单段行为（配置级回滚开关） |
+| `structure.surface_blend_depth` | `3` | 贴地换色深度；负数关闭（悬空结构不受影响） |
+| `features.enabled` | `true` | 地物 LOD 车道总开关（L1 花草走同步快路径不受此段影响） |
+| `features.async` | `true` | 语义同 `structure.async` |
 
 ```toml
 [general]
 enabled = true
 
 [terrain]
-surfaceBlock = "minecraft:stone"
-fillerBiome = "minecraft:plains"
+[vegetation]
+coloring = true
+grassColoring = false
+
+[structure]
+enabled = true
+async = true
+pad_chunks = 16
+column_segments = 6
+surface_blend_depth = 3
+
+[features]
+enabled = true
+async = true
 useBiomeSurface = true
 
 # 群系 key -> 地表方块稀疏覆盖 (可选):
@@ -201,22 +221,42 @@ When a world is freshly created, DH needs a warm-up: a large batch of chunks is 
 
 ## Dependencies
 
-| Dependency | Version |
-|---|---|
-| Minecraft | 1.20.1 |
-| Forge | 47.2.30 |
-| Distant Horizons | 3.3.3 |
-| Terrain Diffusion | 1.20.1 (relies on its public query API `LocalTerrainProvider`) |
-
-TDH is developed and tested against DH 3.3.3. Other versions are untested.
+| Key | Default | Description |
+|---|---|---|
+| `general.enabled` | `true` | Master switch; false = generator not registered, DH's native path takes over |
+| `terrain.surfaceBlock` | `minecraft:stone` | Fallback surface block (pure-geometry mode, or failed biome resolution) |
+| `terrain.fillerBiome` | `minecraft:plains` | Fallback biome (carried by data points) |
+| `terrain.useBiomeSurface` | `true` | Biome-driven surface; false = pure-geometry mode |
+| `terrain.surfaceBlockOverrides` | `{}` | Sparse biome-key to block-ID overrides, surface field only |
+| `vegetation.coloring` | `true` | L1 vegetation canopy approximation (dry columns get canopies by biome density) |
+| `vegetation.grassColoring` | `false` | Grass speckle toggle (off by default: grass shares the grass-block colormap) |
+| `structure.enabled` | `true` | Structure LOD lane master switch (same-seed placement + L3 assembly) |
+| `structure.async` | `true` | Async: terrain LOD publishes first, structures refresh in when done |
+| `structure.pad_chunks` | `16` | Scan padding (chunks); protects cross-region structures from clipping |
+| `structure.column_segments` | `6` | Per-column segment cap; `1` = legacy single-segment behavior (rollback switch) |
+| `structure.surface_blend_depth` | `3` | Surface recolor depth; negative disables (floating structures unaffected) |
+| `features.enabled` | `true` | Feature LOD lane master switch (L1 flowers take a separate sync path) |
+| `features.async` | `true` | Same semantics as `structure.async` |
 
 ## Installation
 
 1. Forge 47.2.30 (1.20.1)
 2. Drop three jars into `mods/`: Distant Horizons, Terrain Diffusion, TDH
 3. Create a world the Terrain Diffusion way; on world load, TDH registers its generator via DH's LevelLoad event (the log line `TDH 生成器注册完成` marks it); non-TD worlds fall back to DH's native generation chain
-4. Make sure DH's Distant Generation is enabled
+[vegetation]
+coloring = true
+grassColoring = false
 
+[structure]
+enabled = true
+async = true
+pad_chunks = 16
+column_segments = 6
+surface_blend_depth = 3
+
+[features]
+enabled = true
+async = true
 ## Configuration
 
 Config file: `config/terrain-diffusion-mc/terrain-diffusion-horizons.toml` (a commented default template is seeded on first run; if a legacy JSON is detected, the log tells you to migrate manually).

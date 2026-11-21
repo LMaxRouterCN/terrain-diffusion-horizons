@@ -653,3 +653,39 @@ tag: td情报, terrain-diffusion-mc, TDH项目, 结构, 高度, 悬案
 vanilla worldgen json 解包固定位置 = D:\temp\van_wg_x (2026-11-20 从 TEST jar 重抽, 52 json = structure_set 19 + structure 33; 白名单 15 集合全在)。旧 %TEMP%\van_wg_x (489 biome json) = B3 tint 时代部分抽取, 从无 structure_set, %TEMP% 活不过几天, 已弃用不删。教训: 解包/取证产物不落 %TEMP%, 统一 D:\temp\<名>。源 jar = E:\MC\.minecraft\versions\TEST 1.20.1-Forge_47.4.10\TEST 1.20.1-Forge_47.4.10.jar (客户端 jar 内 worldgen json 原样)。
 tag: 坑, 教训, 测试环境, TDH项目, 材料学
 <!-- END:145 -->
+<!-- ID:146 -->
+[C批完工 2026-11-21] terrain-diffusion-horizons L3 结构组装管线代码完工, commit 0790b59 (前序: 3a210bd 设计稿, 753154f 侦查收口, 均未push)。五件套: StructureSetParams/SpreadCore/Context/SilentLevel/AssembleCore。哑Level(TdSilentLevel implements WorldGenLevel)完整接口面教训: 补桩从编译器错误消息抄参数列表时返回类型不在消息里, List<T>形态永远安全(List<? extends T>协变方向反会"无法实现"); getHeightmapPos类多父default同签名胜出场景不用补; EntityTypeTest在net.minecraft.world.level.entity。已部署TEST实例 mods (E:\MC\.minecraft\versions\TEST 1.20.1-Forge_47.4.10\mods)。下一步: TEST实跑验证(结构落LOD+locate对照, 可能需清DH LOD缓存防旧缓存遮蔽)。
+tag: C批, 结构, L3, terrain-diffusion-horizons, 架构
+<!-- END:146 -->
+<!-- ID:147 -->
+[DH LOD 数据落点 2026-11-21] DH 世界数据 = saves\<世界名>\data\DistantHorizons.sqlite (单人端), 不在版本目录/根目录。TEST实例16世界15个有库(3MB~359MB)。清缓存重生成 = 删对应世界该文件。判定依据: 版本目录深搜 *istant* 命中, 2026-11-21 实证。
+tag: DistantHorizons, 测试环境, terrain-diffusion-horizons
+<!-- END:147 -->
+<!-- ID:148 -->
+[horizons 软依赖哑火架构 2026-11-21] terrain-diffusion-horizons 主类构造器用 ModList.isLoaded("distanthorizons")/("terrain_diffusion_mc") 双守卫, 缺任一宿主时 DhCompat.register() 不被调 → DhCompat 类不加载 → 其对 fork 类(WorldScaleManager/LocalTerrainProvider)的静态 import 永不解析 = fork 缺席时 horizons 哑火不崩(日志"宿主不全, 兼容层闲置")。教训: 判断"缺依赖是否崩"不能只看 import, 要看守卫链+类加载触发路径, 我曾据静态 import 武断判 NoClassDefFoundError, 实证打脸。另: horizons 的 TdConfig 落盘在 config/terrain-diffusion-mc/terrain-diffusion-horizons.toml (与 fork config 同目录)。
+tag: terrain-diffusion-horizons, 架构, 坑, 教训
+<!-- END:148 -->
+<!-- ID:149 -->
+[fork 禁用案结案 2026-11-21] 11/19 20:16-18 三连 fml crash 根因: models 目录路径当时是非目录体(占位文件/断链), Files.createDirectories(NOFOLLOW)抛 FileAlreadyExistsException→mod loading 失败。环境事故非代码 bug: 20:18 后手动修复, 21:00 与 11/20 02:08 双会话 fork 健康(模型 SHA 全 verified, 1.1GB mtime 6月未动=移动/复制保留)。fork git crash 后零改动(git status 仅 .agent)。禁用发生在 02:18 后纯离线窗口, 与 crash 无因果, 动机=TD 全家禁用清场(fork+B2 horizons 双 zip 化, 习惯同 tdseedprobe.disabled)。解禁=改回 .jar, 风险≈0。判定依据: crash 三报告全文+21:00 会话 log+fork 源码 ModelAssetManager/PlatformPaths+git log/status, 2026-11-21 实证。
+tag: terrain-diffusion-mc, bug根因, 案卷, 测试环境
+<!-- END:149 -->
+<!-- ID:150 -->
+[TdConfig 播种式配置的后果 2026-11-21] TdConfig 落盘设计 = 仅文件不存在时播种模板, 之后只读手改文件, 运行期零写盘。后果: 新版本新增配置键永不自动落进旧文件——C 批 structurePadChunks([structure] pad_chunks, 默认16=256块>=mansion尺度) 在 B2 时代播种的 toml(11/20 02:08 mtime) 里不存在, 走 getOrElse 默认值无害。想让新键可见: 删 toml 重启重播种(11/21 核对当时文件全默认值零手改, 删了零损失)。night-config getOrElse(List 路径, 默认) 对缺键/类型不符均宽容。
+tag: terrain-diffusion-horizons, 架构, 坑
+<!-- END:150 -->
+<!-- ID:151 -->
+[2026-11-21 filter条件拍脑袋案] 写筛选/匹配条件前必须核对已持有的实测数据: fork zip 门槛我写">10MB", 实际 fork 8173348B≈7.8MiB (065记忆当时就在上下文), 零命中收场返工一轮; horizons toml 路径 148记忆明写 config\terrain-diffusion-mc\ 子目录, 我却只扫 config 根. 纪律: 每写一个数值型/路径型条件, 先问"这个值我从哪知道的", 答案是"印象"→去查记忆或回执再写. 与027(扫描器活性自检)/090(断言附证据)同族.
+tag: 坑, 教训, PokerAgent, 数据可信度
+<!-- END:151 -->
+<!-- ID:152 -->
+[C批首跑·管线层全绿 2026-11-21 02:16-02:26] max实跑TEST(world"新的世界(15)", fork解禁+toml重播种后): 壳启动DH=true/TD=true, overworld生成器注册, 撒点15集合/28entry, 车道双注册(structure=SpreadCore/features=AssembleCore各1线程), assemble大量region产出(命中30~47/region, 组装1~8, 列段0~2376, 多数region列段=0), 0 ERROR/0黑名单/0递归过深, toml重播种带[vegetation][structure][features]段. 悬: ①视觉验收(剪影)未出 ②max报"世界里不生成树"=账面预期(树格11-18判停见126, 正主L4地物批未开) ③多数region列段=0: 视觉有剪影则正常(结构稀疏), 无剪影则first lead.
+tag: C批, terrain-diffusion-horizons, 测试环境, 悬案
+<!-- END:152 -->
+<!-- ID:153 -->
+[2026-11-21 C批首跑验收·根因钉死+修复落地] placeInChunk 22495 败全同根因: TdSilentLevel tick 族 UOE. 注: L310 注释自declare绊线=crash驱动信号, 设计有意(我初判"没装哑巴"系误判): B2冒烟无液体结构, 绊线零响放行; 实弹证明 tick 通道是结构放置必经路. 链: 模板放液体→LiquidBlock.updateShape→LevelAccessor.scheduleFluidTick默认法→getFluidTicks UOE→整个chunk放置报废. 损失(按placeInChunk单位估): 尝试49705=27210成+22495败(~45%), 种类: OceanRuin 10820/Monument 8784/Jigsaw(村庄!) 1814/RuinedPortal 975/SwampHut 102. 修复已落地(commit 23a36f1, 47+/7-, BUILD绿11s, 部署TEST 78742B): ①嵌套类SilentTickAccess<T> implements LevelTickAccess: schedule→吞/hasScheduledTick→false/willTickThisTick→false/count→0 ②getBlockTicks+getFluidTicks返单例(沙砾下落走block tick通道, 双堵) ③nextSubTickCount(m_183596_,ScheduledTick构造参数调用)改自增long——只修fluid一层不够, 下一层绊nextSubTickCount ④其余UOE(难度/chunkSource/lightEngine)留作绊线. 官方映射名=recompile_1ab23873 jar javap实证(schedule/hasScheduledTick/count/willTickThisTick). 修后重测不需清sqlite(Unload清缓存新会话覆写). 遗留: 重测待max(靶=placeInChunk归零/列段920581跳升/日志回MB级/村庄剪影).
+tag: C批, terrain-diffusion-horizons, bug根因, TdSilentLevel, tick
+<!-- END:153 -->
+<!-- ID:154 -->
+[2026-11-21 C批修复#2·实体难度通道] 二验: 失败22495→8329, tick UOE归零, RuinedPortal 975→0 (修复#1实锤). 残余8329全为实体结构 (OceanRuin 3821/Jigsaw 2597/Monument 1905/SwampHut 6), 根因=getCurrentDifficultyAt UOE 踩点=Mob.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), STRUCTURE,...) 参数求值位 (先于addFreshEntity, 实体没落库先死). decompile 5现场实证: Monument守卫者L1446/OceanRuin溺尸L197/SwampHut女巫L96+猫L115/WoodlandMansion L1056/StructureTemplate实体处理器L404(=Jigsaw村庄村民路). 修复(b071d4f): 返回静态 DifficultyInstance(Difficulty.NORMAL, 0L, 0L, 0.0F), 构造器签名(Difficulty,long dayTime,long gameTime,float moonPhase) recompile jar javap实证; 难度只影响AI/掉落/装备, 哑世界无副作用面. addFreshEntity: LevelWriter 接口 default 方法 (javap实证) → TdSilentLevel 自动继承, 5现场返回值全是语句调用无人消费, 实体蒸发链天然闭合零代码. 通用教训: 哑Level模式=洋葱皮连环UOE, 每层验尸后"失败名单换血"是下一层的指纹 (无实体结构归零=实体层暴露); 绊线设计+分层修复迭代是正路, 一次全修反而盲. "看不出区别"判定前先核DH渲染距离(realTimeUpdateDistanceRadiusInChunks 256=4096格).
+tag: C批, terrain-diffusion-horizons, bug根因, TdSilentLevel, tick
+<!-- END:154 -->
