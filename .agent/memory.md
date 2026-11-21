@@ -706,6 +706,6 @@ tag: javap, 坑, 技巧, PowerShell
 tag: TDH项目，bug根因，C批，FeaturePoolElement，地物，结构
 <!-- END:158 -->
 <!-- ID:159 -->
-2026-11-21 C批结案(commit=bcc2d12, 实测全过): ①surfaceHint 2.0: 埋地过滤窗口判定源改为 structure piece 的 terrainAdaptation — beard 系留 blendDepth 窗口(吸收 TD 高度场不知放置挖空的假埋深, 窗口内表面1格贴地换色), none/bury 窗口0(埋深>0不渲染). 效果=恶地矿井板色闪烁消失. ②bug#2 根因: TdSilentLevel.getRawBrightness 抛 UnsupportedOperationException → FeaturePoolElement 放置期全灭(旧实测110条 placeInChunk 失败warn); 修复=兜底返回15, 复测归零. ③DH缓存库按世界存 saves/<世界名>/data/DistantHorizons.sqlite, 清缓存须连 -wal/-shm 伴随文件, 删前记录大小+mtime. ④坑: TEST 实例 saves 下16个世界全是"新的世界 (N)"系列命名, 脚本引用须精确目录名(-eq). ⑤日志验证方法论: 用旧会话归档gz解压grep校准关键词命中数, 再对新latest.log同词对比归零 → 排除grep词打偏的假绿. .agent/ 是 PokerAgent 运行时状态目录(每对话都变), C批commit未含它.
+2026-11-21 C批结案(commit=bcc2d12, 实测全过): ①surfaceHint 2.0: 埋地过滤窗口判定源改为 structure piece 的 terrainAdaptation — beard 系留 blendDepth 窗口(吸收 TD 高度场不知放置挖空的假埋深, 窗口内表面1格贴地换色), none/bury 窗口0(埋深>0不渲染). 效果=恶地矿井板色闪烁消失. ②bug#2 根因: TdSilentLevel.getRawBrightness 抛 UnsupportedOperationException → FeaturePoolElement 放置期全灭(旧实测110条 placeInChunk 失败warn); 修复=兜底返回15, 复测归零. ③DH缓存库按世界存 saves/<世界名>/data/DistantHorizons.sqlite, 清缓存须连 -wal/-shm 伴随文件, 删前记录大小+mtime. ④坑: TEST 实例 saves 下16个世界全是"新的世界 (N)"系列命名, 脚本引用须精确目录名(-eq). ⑤日志验证方法论: 用旧会话归档gz解压grep校准关键词命中数, 再对新latest.log同词对比归零 → 排除grep词打偏的假绿. ⑥.agent/ 目录随代码 commit 是仓库既有惯例(d92519f/0790b59/753154f 均含), 上轮误判排除后已补交.
 tag: TDH项目, C批, bug根因, 案卷, 测试环境
 <!-- END:159 -->

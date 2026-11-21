@@ -331,13 +331,63 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                 // 帽段修法: 列高走 bed 段顶 (地形高度不动), 取色走帽段 (花色); 与 vanilla 几何
                 // 一致 (花长在草上方, 非替换); 悬崖侧面仍 bed 色 (方案 b 视觉目标保持).
                 // maxY 守卫防顶越界 (段 [顶, 顶+1) 需 顶+1 <= maxY).
+                // ==== [D批] 埋地段三明治: 基础段按列链埋地段切分, 取代旧"埋地整段不写" ====
+                // 旧: 平铺端 sT <= coverTop 整段跳过 → 水下结构 (monument/沉船) 全灭, 埋地段剖面缺失;
+                // 新: 发射前自底向上铺埋地段 (sT <= envCover = 水面/地表), 床/水垫填缝隙, 区间
+                // 严格不重叠 (DH 段堆叠不变量, 帽段事故同族); 平铺端跳过条件原样保留,
+                // 语义转为"已发射". 无链列/无埋地段列输出与旧版逐字节等价 (回归安全).
+                int envCover = coverTop; // 帽/树抬升前的环境顶快照: 水列 = 水面, 干列 = 地表
+                int envCursor = dataBottom; // 环境垫填充游标 (自底向上)
+                if (colChain != null) {
+                    for (int ci = colChain.size() - 1; ci >= 0; ci--) { // 倒读 = 自底向上 (链 top-down 存储)
+                        LaneSegment seg = colChain.get(ci);
+                        int sB = clampY(seg.bottomY() - minY, dataBottom, maxY);
+                        int sT = clampY(seg.topY() - minY, dataBottom, maxY);
+                        if (sT > envCover) {
+                            break; // 首个埋地界外段: 其上 (更高) 全归平铺端暴露路径, 出循环
+                        }
+                        if (sB < envCursor) {
+                            sB = envCursor; // 钳位防御 (链本无重叠, 兜底)
+                        }
+                        // [C批·B案] 顶格埋地段 (sT == solidTop) 顶部让位表面 1 格换色块 (防重叠);
+                        // scol 关闭 (窗口外/水列) 时照发满段 = topmost 自然取结构色 (顶格路免换色也可见)
+                        if (scol != null && sT == solidTop) {
+                            sT = solidTop - 1;
+                        }
+                        if (sB >= sT) {
+                            continue; // 退化零高段 (钳位防御; 尾垫吸收其填充)
+                        }
+                        if (sB > envCursor) { // 段下基础垫: 床到海床线, 水列再水垫到段底
+                            int fb = Math.min(sB, solidTop);
+                            if (fb > envCursor) {
+                                points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, envCursor, fb, bedBlock, style.biome));
+                            }
+                            if (waterCol && sB > solidTop) {
+                                points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, Math.max(envCursor, solidTop), sB,
+                                        style.iceCover ? iceBlock : waterBlock, style.biome));
+                            }
+                        }
+                        IDhApiBlockStateWrapper sw = structWrapper(seg.blockId());
+                        points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, sB, sT,
+                                sw != null ? sw : airBlock, style.biome)); // wrapper 失败降级 air (几何洞保高度, 平铺端同语义)
+                        envCursor = sT;
+                    }
+                }
+                // 尾垫: 干列 = 床到地表; 水列 = 床到海床 + 水到水面 (旧独立水段发射已删, 并入此处)
+                int bedTop = scol != null ? solidTop - 1 : solidTop;
+                int tailBed = Math.min(envCover, bedTop);
+                if (tailBed > envCursor) {
+                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, envCursor, tailBed, bedBlock, style.biome));
+                }
+                int waterFrom = Math.max(envCursor, solidTop);
+                if (waterCol && envCover > waterFrom) {
+                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, waterFrom, envCover,
+                            style.iceCover ? iceBlock : waterBlock, style.biome));
+                }
                 if (scol != null) {
                     // [C批·B案] 换色列: 床段拆两截 — 表面 1 格结构色 + 以下群系床色 (悬崖侧面不被路色污染;
                     // B 案块守卫已保证 solidTop-1 > dataBottom, 拆段无零高)
-                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop - 1, bedBlock, style.biome));
                     points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop - 1, solidTop, scol, style.biome));
-                } else {
-                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop, bedBlock, style.biome));
                 }
                 if (topBlock != null && solidTop < maxY) {
                     points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, solidTop + 1, topBlock, style.biome));
@@ -479,14 +529,11 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                     }
                     coverTop = cursor; // 结构顶 (尾段空气由下方公共 coverTop < maxY 分支写)
                 }
-                // 水段仅水列开火: 干列树冠抬高的 coverTop 不得触发水段 (否则树冠上叠同区间水膜);
-                // 等效性: 旧代码 coverTop>solidTop 只能由两个水列分支造成 (均置 waterCol), 此门不改原有行为
-                if (waterCol && coverTop > solidTop) {
-                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, coverTop, style.iceCover ? iceBlock : waterBlock, style.biome));
-                }
+                // [D批] 水段并入上方基础三明治尾垫 (水列: 床到海床 + 水到水面, 埋地结构切分其中);
+                // 旧独立发射删除 — waterCol 门语义不变 (树仅干列, 干列树冠抬高的 coverTop 从不触发水段)
                 // ==== [L3] 结构段链平铺 (C 批合并点; C-light 多段) ====
-                // 列链 top-down, 倒读自底向上平铺: sTop <= coverTop 跳过 = 地形遮蔽 / 水下结构矮于水面
-                // (海面语义保持, monument 视觉顶=海面); 段被截断 (sBottom < coverTop) 裁剪;
+                // 列链 top-down, 倒读自底向上平铺: sT <= coverTop 跳过 = 埋地段已由基础三明治发射
+                // (D批; 帽上 1 格夹缝段弃); 段被截断 (sBottom < coverTop) 裁剪;
                 // 段下缝隙显式 air 垫 (DH 段堆叠不变量, 帽段事故同源); wrapper 失败段降级 air
                 // (几何洞保高度); 平铺后 coverTop = 最高段顶, 尾段 air 自结构顶起
                 if (colChain != null) {
