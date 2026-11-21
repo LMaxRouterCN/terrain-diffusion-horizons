@@ -294,6 +294,15 @@ public final class TdSilentLevel implements WorldGenLevel {
         return 1.0f; // 剪影无光照依赖
     }
 
+    @Override
+    public int getRawBrightness(BlockPos pos, int amount) {
+        // 满昼光 [长期记忆: 158]: CropBlock.canSurvive 的 getRawBrightness(pos,0)>=8 永真短路
+        // (canSeeSky 同式短路不触) — 农作物放置链不再击杀 placeInChunk (farm chunk 曾半放置);
+        // 与 getSkyDarken()=0 / getShade()=1.0f 同族 "剪影无光照" 第四面;
+        // getLightEngine 保持 UOE 绊线 (其他光照调用者触发即打名, crash 驱动不污染)
+        return Math.max(0, 15 - amount);
+    }
+
     // ==== no-op 桩 (事件/粒子: 结构生成必不触; 触了也无损 — 不给 crash 信号) ====
 
     @Override

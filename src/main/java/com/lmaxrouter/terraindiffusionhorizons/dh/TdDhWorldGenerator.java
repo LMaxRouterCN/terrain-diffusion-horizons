@@ -256,8 +256,11 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                 }
                 // 案②α: 列表面样式 (群系驱动; 查询未带群系时退 fallback)
                 ColumnStyle style = biomeIdx != null ? resolveStyle(biomeIdx[idx]) : fallbackStyle;
-                // ==== [C批·B案] 贴地换色: 埋地结构顶段距地表 <= blendDepth 时表面 1 格换结构块色 ====
-                // 通用规则零结构特判 (路=土色条带, farmland=棕切片; 悬空结构无埋地段不触发);
+                // ==== [C批·B案] 贴地换色: 埋地结构顶段距地表 <= 窗口 时表面 1 格换结构块色 ====
+                // 窗口按结构 terrain_adaptation 分档 [长期记忆: 156]: beard 系 (村庄路/前哨站) = 原版
+                // 放置挖空 bbox 上覆, 路顶必然露天, TD 高度场不知此挖掘 → 假埋深, 窗口 = blendDepth 吸收;
+                // none/bury (矿井/要塞/沉船) = 地形不动/主动埋入, 埋深即真埋, 窗口 0: 埋深 > 0 不渲染
+                // (原版不可见即 LOD 不可见, 出露段埋深 <= 0 照常); 悬空结构无埋地段不触发;
                 // 水列不换 (海面语义保持, 水下结构归 D 案); blendDepth < 0 = 整案关闭
                 List<LaneSegment> colChain = structSegs[x * cols + z];
                 IDhApiBlockStateWrapper scol = null;
@@ -266,7 +269,8 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                     for (LaneSegment seg : colChain) {
                         int segTopRel = clampY(seg.topY() - minY, dataBottom, maxY);
                         if (segTopRel <= solidTop) {
-                            if (solidTop - segTopRel <= blendDepth) {
+            int window = seg.surfaceHint() ? blendDepth : 0; // beard=窗口吸收高度场误差; none/bury=真埋, 0
+            if (solidTop - segTopRel <= window) {
                                 scol = structWrapper(seg.blockId()); // wrapper 失败 = null 不换色
                             }
                             break;

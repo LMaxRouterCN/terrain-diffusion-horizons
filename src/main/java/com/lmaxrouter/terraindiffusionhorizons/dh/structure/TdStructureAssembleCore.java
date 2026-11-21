@@ -22,6 +22,7 @@ import net.minecraft.world.level.levelgen.LegacyRandomSource;
 import net.minecraft.world.level.levelgen.WorldgenRandom;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.levelgen.structure.TerrainAdjustment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,6 +80,7 @@ public final class TdStructureAssembleCore implements LaneCore {
         }
 
         TdSilentLevel level = new TdSilentLevel(ctx);
+        List<BoundingBox> beardBoxes = new ArrayList<>(); // beard 系 bbox 收集 (surfaceHint 判定源 [长期记忆: 156])
         List<LanePayload> segments = new ArrayList<>();
         // far-lookup 会话: 高度采样走 coarse 捷径 (ThreadLocal 计数器, 车道线程自洽
         // [LocalTerrainProvider 实证]; 与 /locate 结构搜索同机制)
@@ -90,12 +92,12 @@ public final class TdStructureAssembleCore implements LaneCore {
                 if (entries == null) {
                     continue; // 集合全 miss 已在装配期跳过, 双保险
                 }
-                if (assemble(ctx, entries, worldSeed, hit, level) != null) {
+                if (assemble(ctx, entries, worldSeed, hit, level, beardBoxes) != null) {
                     assembled++;
                 }
             }
             if (assembled > 0) {
-                foldColumns(level,
+                foldColumns(level, beardBoxes,
                         rMinX << 4, rMinZ << 4, (rMaxX << 4) + 15, (rMaxZ << 4) + 15, segments);
                 LOG.info("[assemble] region dl{} +({},{}) -> {} 命中 / {} 组装 / {} 列段",
                         detailLevel, posX, posZ, hits.size(), assembled, segments.size());
@@ -108,7 +110,7 @@ public final class TdStructureAssembleCore implements LaneCore {
 
     /** 单 hit 组装: 消元循环选 entry -> generate -> placeInChunk. 失败返回 null. */
     private StructureStart assemble(TdStructureContext.Snapshot ctx, List<TdStructureContext.ResolvedEntry> entries,
-                                    long seed, StructureHit hit, TdSilentLevel level) {
+                                    long seed, StructureHit hit, TdSilentLevel level, List<BoundingBox> beardBoxes) {
         // biomeSource: vanilla tryGenerateStructure 用 generator 的字段, 此处同源直取
         BiomeSource biomeSource = ctx.generator().getBiomeSource();
         Structure chosen;
@@ -128,6 +130,12 @@ public final class TdStructureAssembleCore implements LaneCore {
         }
         // placeInChunk: bbox 逐 chunk (vanilla applyBiomeDecoration 结构步复刻, 设计稿 §3.3)
         BoundingBox bb = start.getBoundingBox();
+        // surfaceHint 判定源 [长期记忆: 156]: beard 系放置时原版挖空 bbox 上覆 (路顶必然露天),
+        // TD 高度场不知此挖掘 → 假埋深, 消费端留 blendDepth 窗口吸收; none/bury 埋深即真埋, 不进表
+        if (chosen.terrainAdaptation() == TerrainAdjustment.BEARD_THIN
+                || chosen.terrainAdaptation() == TerrainAdjustment.BEARD_BOX) {
+            beardBoxes.add(bb); // bbox = piece 盒并集超集, OR 语义宁多勿漏 (多标列埋深多 <=0, 行为不变)
+        }
         for (int cz = bb.minZ() >> 4; cz <= bb.maxZ() >> 4; cz++) {
             for (int cx = bb.minX() >> 4; cx <= bb.maxX() >> 4; cx++) {
                 ChunkPos cp = new ChunkPos(cx, cz);
@@ -191,7 +199,7 @@ public final class TdStructureAssembleCore implements LaneCore {
     }
 
     /** 列折叠: 每列多段切分 -> LaneSegment 链 (C-light; 半开 [bottom, top+1)), clip region 界. */
-    private void foldColumns(TdSilentLevel level, int minBlockX, int minBlockZ,
+    private void foldColumns(TdSilentLevel level, List<BoundingBox> beardBoxes, int minBlockX, int minBlockZ,
                              int maxBlockX, int maxBlockZ, List<LanePayload> out) {
         for (ProtoChunk chunk : level.chunks()) {
             ChunkPos p = chunk.getPos();
@@ -206,21 +214,32 @@ public final class TdStructureAssembleCore implements LaneCore {
                     if (wz < minBlockZ || wz > maxBlockZ) {
                         continue;
                     }
-                    columnTop(level, sections, wx, wz, out);
+                    columnTop(level, sections, wx, wz, inBeardBox(wx, wz, beardBoxes), out);
                 }
             }
         }
     }
 
+    /** 列是否落在 beard 系结构 XZ 投影内 (surfaceHint 判定; 每列 O(boxes) 整数比较, 车道线程私有). */
+    private static boolean inBeardBox(int wx, int wz, List<BoundingBox> boxes) {
+        for (BoundingBox bb : boxes) {
+            if (wx >= bb.minX() && wx <= bb.maxX() && wz >= bb.minZ() && wz <= bb.maxZ()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * 单列多段折叠 (C-light): 自顶向下单趟, blockId 变化处切段, 空气/structure_void 闭合段;
      * 段数上限可配 (structureColumnSegments, 默认 6; =1 恰好复现旧单段行为 = 配置级回滚).
+     * surfaceHint 随段携带 (列级 beard 投影事实 [长期记忆: 156]), 不参与折叠逻辑.
      *
      * <p>超限吞底: 名额用尽时当前段吸收后续异块延伸到列底 (块色保持段首块, 高度不浮空);
      * 已被空气闭合后名额已满的后续内容丢弃 (极端深结构兜底, 默认值下罕见).
      * 空 section = 16 格空气, 同样闭合 (塔尖与柱基同 id 不得跨空 section 误并段).</p>
      */
-    private void columnTop(TdSilentLevel level, LevelChunkSection[] sections, int wx, int wz, List<LanePayload> out) {
+    private void columnTop(TdSilentLevel level, LevelChunkSection[] sections, int wx, int wz, boolean surfaceHint, List<LanePayload> out) {
         final int limit = Math.max(1, TdConfig.get().structureColumnSegments); // >=1 防御 (0/负 = 退单段)
         Block runBlock = null; // 当前段块单例 (== 比较; id 仅 emit 时取, 每段一次 getKey)
         int runTop = 0;       // 段顶 y (开段时定格; 半开区间 [runBottom, runTop+1))
@@ -231,7 +250,7 @@ public final class TdStructureAssembleCore implements LaneCore {
             if (s == null || s.hasOnlyAir()) {
                 if (runBlock != null) { // 空 section: 闭合段
                     out.add(new LaneSegment(wx, wz, runBottom, runTop + 1,
-                            BuiltInRegistries.BLOCK.getKey(runBlock).toString()));
+                            BuiltInRegistries.BLOCK.getKey(runBlock).toString(), surfaceHint));
                     segCount++;
                     runBlock = null;
                 }
@@ -245,7 +264,7 @@ public final class TdStructureAssembleCore implements LaneCore {
                 // 闭合: 空气 / 异块且还有切换名额 (闭合后可开新段)
                 if (runBlock != null && (airLike || (blk != runBlock && segCount + 1 < limit))) {
                     out.add(new LaneSegment(wx, wz, runBottom, runTop + 1,
-                            BuiltInRegistries.BLOCK.getKey(runBlock).toString()));
+                            BuiltInRegistries.BLOCK.getKey(runBlock).toString(), surfaceHint));
                     segCount++;
                     runBlock = null;
                 }
@@ -264,7 +283,7 @@ public final class TdStructureAssembleCore implements LaneCore {
         }
         if (runBlock != null) { // 列底 flush: 开放段 (吞底态延伸到列底)
             out.add(new LaneSegment(wx, wz, runBottom, runTop + 1,
-                    BuiltInRegistries.BLOCK.getKey(runBlock).toString()));
+                    BuiltInRegistries.BLOCK.getKey(runBlock).toString(), surfaceHint));
         }
     }
 }
