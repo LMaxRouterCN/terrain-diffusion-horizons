@@ -68,6 +68,11 @@ public final class TdConfig {
     public boolean structureAsync = true;
     /** [structure] 扫描外扩 (chunk; L3 组装: bbox 跨 region 界的结构防截断; 默认 16 = 256 块 >= mansion 尺度). */
     public int structurePadChunks = 16;
+    /** [structure] 列折叠段数上限 (C-light 多段折叠; 1 = 旧单段行为 = 配置级回滚; 小 = 省 FPS). */
+    public int structureColumnSegments = 6;
+
+    /** [structure] 贴地换色深度 (B 案: 埋地结构顶段距地表 <= 此值时表面 1 格换结构块色; 负 = 关闭). */
+    public int structureSurfaceBlendDepth = 3;
 
     /** [features] 地物车道总开关 (L3/L4 真地物载荷占位; L1 花草色斑是同步快路径, 开关在 [vegetation] 段). */
     public boolean featuresEnabled = true;
@@ -136,6 +141,9 @@ public final class TdConfig {
         cfg.structureAsync = c.getOrElse(List.of("structure", "async"), Boolean.TRUE);
         // [L3] 组装扫描外扩 (chunk): bbox 跨 region 界的结构防截断 (默认 16 = 256 块 >= mansion 尺度)
         cfg.structurePadChunks = c.getOrElse(List.of("structure", "pad_chunks"), 16);
+        // [C批·C-light] 列折叠段数上限 / [C批·B案] 贴地换色深度
+        cfg.structureColumnSegments = c.getOrElse(List.of("structure", "column_segments"), 6);
+        cfg.structureSurfaceBlendDepth = c.getOrElse(List.of("structure", "surface_blend_depth"), 3);
         cfg.featuresEnabled = c.getOrElse(List.of("features", "enabled"), Boolean.TRUE);
         cfg.featuresAsync = c.getOrElse(List.of("features", "async"), Boolean.TRUE);
         // overrides: 子表 [terrain.surfaceBlockOverrides]; 缺失/类型不符 = 空 map
@@ -189,6 +197,12 @@ public final class TdConfig {
             # 异步: true = 地形 LOD 先发布, 结构算完自动刷新补全 (不拖慢地形出图);
             #       false = 同步模式, 地形 LOD 扣住等结构算完才显示 (一次成型, 无刷新闪烁).
             async = true
+            # 列折叠段数上限 (C-light): 结构列按方块变化切多段 (小屋的腿/板/顶, 树的干/叶),
+            # 1 = 旧单段行为 (配置级回滚); 段多越忠实, FPS 代价越高, 实测权衡.
+            column_segments = 6
+            # 贴地换色深度 (B 案): 埋地结构 (路/农田) 顶面距地表 <= 此值时表面 1 格换结构块色;
+            # 负数 = 关闭. 悬空结构不受影响 (换色只对埋地段生效).
+            surface_blend_depth = 3
 
             [features]
             # 地物 LOD 车道 (L3/L4 真地物载荷占位; L1 花草色斑是同步快路径, 开关在上方 [vegetation] 段, 不受此段影响).

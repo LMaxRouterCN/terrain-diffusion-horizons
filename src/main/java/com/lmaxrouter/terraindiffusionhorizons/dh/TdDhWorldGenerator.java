@@ -197,16 +197,19 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         int dataBottom = 0; // 相对语义: 0 = 世界底 (主世界即绝对 -64); 地下不可见不写段, 与官方模板同构
         int maxY = levelWrapper.getMaxHeight() - minY; // 维度顶转相对 (主世界 320-(-64) = 384)
         int seaTop = clampY(HeightConverter.convertToMinecraftHeight((short) 0) - minY, dataBottom, maxY); // [O] 海平面 (convert(0)=63): 海洋列水段顶, 循环外常量
+        int blendDepth = TdConfig.get().structureSurfaceBlendDepth; // [C批·B案] 贴地换色深度 (负 = 整案关闭)
         int width = data.width;               // TD 数组宽 = X 向块数
         float[] elev = data.elevation;        // 海拔米 (行主序 idx = z*width + x)
         byte[] waterMask = data.waterMask;    // 水强度 0-255 (>=8 有效, <8 边缘抗锯齿格 [W])
         float[] waterSurf = data.waterSurface; // 水面海拔米 (可能为 null)
         short[] biomeIdx = withBiomes ? data.biomeIndexes : null; // 案②α: 群系索引 (withBiomes=true 时非 null)
 
-        // ==== [L3] 结构段索引: features 车道载荷 -> 列顶段 (世界块坐标 -> 数据源局部) ====
-        // b = [Z起, X起, Z止, X止] (dataSourceBlockBounds 返回序); 同列多段取 topY 最高者 (顶盖语义, 重叠结构罕见);
-        // 越界弃 = AssembleCore 已 clip region 界的防御双保险
-        LaneSegment[] structSegs = new LaneSegment[cols * cols];
+        // ==== [L3] 结构段链装配: features 车道载荷 -> 列段链 (世界块坐标 -> 数据源局部) ====
+        // b = [Z起, X起, Z止, X止] (dataSourceBlockBounds 返回序); TDH 只供 dl0, 列宽 1 块,
+        // 块坐标与数据点 1:1 (无多列争槽问题); fold 端单趟保证每世界列恰一条 top-down 链,
+        // 载荷序即链序, 直接按序入槽; 越界弃 = AssembleCore 已 clip region 界的防御双保险
+        @SuppressWarnings("unchecked") // 泛型数组 (cols 编译期未知; 列内序由 fold 单趟单源保证)
+        List<LaneSegment>[] structSegs = new List[cols * cols];
         if (structPayloads != null) {
             for (LanePayload p : structPayloads) {
                 if (!(p instanceof LaneSegment seg)) {
@@ -217,11 +220,12 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                 if (lx < 0 || lx >= cols || lz < 0 || lz >= cols) {
                     continue;
                 }
-                int li = lx * cols + lz;
-                LaneSegment cur = structSegs[li];
-                if (cur == null || seg.topY() > cur.topY()) {
-                    structSegs[li] = seg;
+                List<LaneSegment> chain = structSegs[lx * cols + lz];
+                if (chain == null) {
+                    chain = new ArrayList<>();
+                    structSegs[lx * cols + lz] = chain;
                 }
+                chain.add(seg); // 同列按载荷序入链 (fold 端 top-down, C-light 多段)
             }
         }
         for (int x = 0; x < cols; x++) {
@@ -252,6 +256,23 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                 }
                 // 案②α: 列表面样式 (群系驱动; 查询未带群系时退 fallback)
                 ColumnStyle style = biomeIdx != null ? resolveStyle(biomeIdx[idx]) : fallbackStyle;
+                // ==== [C批·B案] 贴地换色: 埋地结构顶段距地表 <= blendDepth 时表面 1 格换结构块色 ====
+                // 通用规则零结构特判 (路=土色条带, farmland=棕切片; 悬空结构无埋地段不触发);
+                // 水列不换 (海面语义保持, 水下结构归 D 案); blendDepth < 0 = 整案关闭
+                List<LaneSegment> colChain = structSegs[x * cols + z];
+                IDhApiBlockStateWrapper scol = null;
+                if (!waterCol && blendDepth >= 0 && colChain != null && solidTop > dataBottom + 1) {
+                    // top-down 首个 segTop <= solidTop 的段 = 埋地顶段 (更深的段不考虑)
+                    for (LaneSegment seg : colChain) {
+                        int segTopRel = clampY(seg.topY() - minY, dataBottom, maxY);
+                        if (segTopRel <= solidTop) {
+                            if (solidTop - segTopRel <= blendDepth) {
+                                scol = structWrapper(seg.blockId()); // wrapper 失败 = null 不换色
+                            }
+                            break;
+                        }
+                    }
+                }
                 List<DhApiTerrainDataPoint> points = new ArrayList<>(3);
                 // [长期记忆: 092] 段底喂 dataBottom (非负): 负值被 DH 12 位无符号存储回绕成 4032 → 冲天石柱元凶 (已修)
                 // 水列底段方块: ocean 列 = 群系海床方块, fluvial 列按水强度分档 [C] (经验配比 + 空间散列, 键用世界块坐标)
@@ -268,10 +289,11 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                     }
                 }
                 // ==== L1 花草色斑 (列级概率近似; 视觉目标 = 方案 b, 发射形态 = 方案 a 帽段) ====
-                // 守卫: cfg 开关 + 干列 (水列顶是水/冰盖) + 列顶在地表以上 + 群系有花草样式;
+                // 守卫: cfg 开关 + 干列 (水列顶是水/冰盖) + 列顶在地表以上 + 群系有花草样式
+                // + 非换色列 (C批·B案: 贴地结构列不掷花草 — 路/农田无花, 且帽段会与结构段争列顶);
                 // 花优先于草, 草池受 grassColoring gate (草色≈草方块色, 留口默认不发, TdFlowerMap 类注 6)
                 IDhApiBlockStateWrapper topBlock = null;
-                if (cfg0.vegetationColoring && !waterCol && solidTop > dataBottom && style.flower != null) {
+                if (cfg0.vegetationColoring && !waterCol && scol == null && solidTop > dataBottom && style.flower != null) {
                     int gx = b[1] + x; // 世界块坐标 (与 [C] 河床分档散列同源)
                     int gz = b[0] + z;
                     // 列哈希: 结构 (XOR 流) 与尾盐均区别于树格, 避免花斑与树格系统性同位
@@ -297,7 +319,7 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                         }
                     }
                 }
-                // 基础段发射: 原单段 [底, 顶) 恒发; 命中 = 顶上方加 [顶, 顶+1) 花草帽段
+                // 基础段发射: 床段 [底, 顶) 恒发 (换色列拆两截, 见下); 命中 = 顶上方加 [顶, 顶+1) 花草帽段
                 // [bug根因 2026-11-18 TEST 实测症状 + 机制推断(jar 溯源同轮验证)] 旧拆段方案:
                 // 花/草 = cross 非 solid, DH 顶面取色吃 topmost 段但列高跳过非 solid 段
                 // → 花列整体矮 1 格 ("上色块下沉" = 坑); 坑壁 4 侧 = +4 quad/命中列,
@@ -305,7 +327,14 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                 // 帽段修法: 列高走 bed 段顶 (地形高度不动), 取色走帽段 (花色); 与 vanilla 几何
                 // 一致 (花长在草上方, 非替换); 悬崖侧面仍 bed 色 (方案 b 视觉目标保持).
                 // maxY 守卫防顶越界 (段 [顶, 顶+1) 需 顶+1 <= maxY).
-                points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop, bedBlock, style.biome));
+                if (scol != null) {
+                    // [C批·B案] 换色列: 床段拆两截 — 表面 1 格结构色 + 以下群系床色 (悬崖侧面不被路色污染;
+                    // B 案块守卫已保证 solidTop-1 > dataBottom, 拆段无零高)
+                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop - 1, bedBlock, style.biome));
+                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop - 1, solidTop, scol, style.biome));
+                } else {
+                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, dataBottom, solidTop, bedBlock, style.biome));
+                }
                 if (topBlock != null && solidTop < maxY) {
                     points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, solidTop + 1, topBlock, style.biome));
                     // [bug根因 2026-11-18] 帽段占用 [solidTop, solidTop+1) 但 coverTop 未抬升, 尾段 air 仍按
@@ -451,18 +480,30 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                 if (waterCol && coverTop > solidTop) {
                     points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, solidTop, coverTop, style.iceCover ? iceBlock : waterBlock, style.biome));
                 }
-                // ==== [L3] 结构段接管列顶 (C 批合并点; 设计稿 batch-c-design §2.6) ====
-                // sseg.topY = 顶块上界 (半开) -> 相对列高 sTop = topY - minY; 高于当前覆盖面才发段:
-                // 水下结构矮于水面 = 海面语义保持 (monument 视觉顶=海面); 埋地矮于 solidTop = 不可见, 均自然跳过
-                LaneSegment sseg = structSegs[x * cols + z];
-                if (sseg != null) {
-                    int sTop = clampY(sseg.topY() - minY, dataBottom, maxY);
-                    if (sTop > coverTop) {
-                        IDhApiBlockStateWrapper sw = structWrapper(sseg.blockId());
-                        if (sw != null) {
-                            points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, coverTop, sTop, sw, style.biome));
-                            coverTop = sTop; // 尾段 air 自结构顶起 (DH 段堆叠不变量, 帽段事故教训同源)
+                // ==== [L3] 结构段链平铺 (C 批合并点; C-light 多段) ====
+                // 列链 top-down, 倒读自底向上平铺: sTop <= coverTop 跳过 = 地形遮蔽 / 水下结构矮于水面
+                // (海面语义保持, monument 视觉顶=海面); 段被截断 (sBottom < coverTop) 裁剪;
+                // 段下缝隙显式 air 垫 (DH 段堆叠不变量, 帽段事故同源); wrapper 失败段降级 air
+                // (几何洞保高度); 平铺后 coverTop = 最高段顶, 尾段 air 自结构顶起
+                if (colChain != null) {
+                    for (int ci = colChain.size() - 1; ci >= 0; ci--) {
+                        LaneSegment seg = colChain.get(ci);
+                        int sBottom = clampY(seg.bottomY() - minY, dataBottom, maxY);
+                        int sTop = clampY(seg.topY() - minY, dataBottom, maxY);
+                        if (sTop <= coverTop || sBottom >= sTop) {
+                            continue; // 埋地/退化零高段 (clamp 防御)
                         }
+                        if (sBottom < coverTop) {
+                            sBottom = coverTop; // 被地形/前段截断: 裁剪段底
+                        }
+                        if (sBottom > coverTop) {
+                            // 段下缝隙: 显式 air 段 (悬空内腔上沿/腿柱之上)
+                            points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, coverTop, sBottom, airBlock, style.biome));
+                        }
+                        IDhApiBlockStateWrapper sw = structWrapper(seg.blockId());
+                        points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, sBottom, sTop,
+                                sw != null ? sw : airBlock, style.biome));
+                        coverTop = sTop;
                     }
                 }
                 if (coverTop < maxY) {

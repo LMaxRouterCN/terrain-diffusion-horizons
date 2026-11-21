@@ -6,7 +6,8 @@ import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LaneCore;
 import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LanePayload;
 import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LaneSegment;
 import com.lmaxrouter.terraindiffusionhorizons.dh.lane.StructureHit;
-import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -189,7 +190,7 @@ public final class TdStructureAssembleCore implements LaneCore {
                 ctx.templateManager(), seed, new ChunkPos(cx, cz), 0, ctx.level(), pred);
     }
 
-    /** 列折叠: 每列自顶向下首个非空气块 -> LaneSegment (半开 [bottom, top+1)), clip region 界. */
+    /** 列折叠: 每列多段切分 -> LaneSegment 链 (C-light; 半开 [bottom, top+1)), clip region 界. */
     private void foldColumns(TdSilentLevel level, int minBlockX, int minBlockZ,
                              int maxBlockX, int maxBlockZ, List<LanePayload> out) {
         for (ProtoChunk chunk : level.chunks()) {
@@ -211,31 +212,59 @@ public final class TdStructureAssembleCore implements LaneCore {
         }
     }
 
-    /** 单列: 顶块 + 连续段底 (跨 section 追底, 段底仅信息性 — 合并器只消费 top/blockId). */
+    /**
+     * 单列多段折叠 (C-light): 自顶向下单趟, blockId 变化处切段, 空气/structure_void 闭合段;
+     * 段数上限可配 (structureColumnSegments, 默认 6; =1 恰好复现旧单段行为 = 配置级回滚).
+     *
+     * <p>超限吞底: 名额用尽时当前段吸收后续异块延伸到列底 (块色保持段首块, 高度不浮空);
+     * 已被空气闭合后名额已满的后续内容丢弃 (极端深结构兜底, 默认值下罕见).
+     * 空 section = 16 格空气, 同样闭合 (塔尖与柱基同 id 不得跨空 section 误并段).</p>
+     */
     private void columnTop(TdSilentLevel level, LevelChunkSection[] sections, int wx, int wz, List<LanePayload> out) {
+        final int limit = Math.max(1, TdConfig.get().structureColumnSegments); // >=1 防御 (0/负 = 退单段)
+        Block runBlock = null; // 当前段块单例 (== 比较; id 仅 emit 时取, 每段一次 getKey)
+        int runTop = 0;       // 段顶 y (开段时定格; 半开区间 [runBottom, runTop+1))
+        int runBottom = 0;    // 段底 y (同块/吞底向下延伸)
+        int segCount = 0;     // 已 emit 段数
         for (int si = sections.length - 1; si >= 0; si--) {
             LevelChunkSection s = sections[si];
             if (s == null || s.hasOnlyAir()) {
+                if (runBlock != null) { // 空 section: 闭合段
+                    out.add(new LaneSegment(wx, wz, runBottom, runTop + 1,
+                            BuiltInRegistries.BLOCK.getKey(runBlock).toString()));
+                    segCount++;
+                    runBlock = null;
+                }
                 continue;
             }
             for (int y = 15; y >= 0; y--) {
                 BlockState st = s.getBlockState(wx & 15, y, wz & 15);
-                if (st.isAir()) {
-                    continue;
+                Block blk = st.getBlock();
+                int yAbs = level.getMinBuildHeight() + (si << 4) + y; // section 底自算 [1.20.1 无 bottomBlockY 字段]
+                boolean airLike = st.isAir() || blk == Blocks.STRUCTURE_VOID; // void 按 air 防御过滤 (落盘与否未实证)
+                // 闭合: 空气 / 异块且还有切换名额 (闭合后可开新段)
+                if (runBlock != null && (airLike || (blk != runBlock && segCount + 1 < limit))) {
+                    out.add(new LaneSegment(wx, wz, runBottom, runTop + 1,
+                            BuiltInRegistries.BLOCK.getKey(runBlock).toString()));
+                    segCount++;
+                    runBlock = null;
                 }
-                int topY = level.getMinBuildHeight() + (si << 4) + y; // section 底自算: 1.20.1 LevelChunkSection 无 bottomBlockY 字段 [L21-25 实证]
-                int bottomY = topY;
-                BlockPos probe = new BlockPos(wx, 0, wz);
-                // 连续段底: 自顶向下追到首个空气 (跨 section; 只作信息性载荷)
-                while (bottomY - 1 >= level.getMinBuildHeight()
-                        && !level.getBlockState(probe.atY(bottomY - 1)).isAir()) {
-                    bottomY--;
+                if (!airLike) {
+                    if (runBlock == null) { // 开新段 (名额已满 = 封顶后内容, 丢弃)
+                        if (segCount < limit) {
+                            runBlock = blk;
+                            runTop = yAbs;
+                            runBottom = yAbs;
+                        }
+                    } else { // 吞: 同块延伸 / 异块但名额用尽 (吞底, 块色保持段首)
+                        runBottom = yAbs;
+                    }
                 }
-                String id = BuiltInRegistries.BLOCK.getKey(st.getBlock()).toString();
-                // 顶块占 [topY, topY+1): 半开区间与 DH 数据点协议一致
-                out.add(new LaneSegment(wx, wz, bottomY, topY + 1, id));
-                return; // 本列完成 (LOD 列模型 = 单可视顶)
             }
+        }
+        if (runBlock != null) { // 列底 flush: 开放段 (吞底态延伸到列底)
+            out.add(new LaneSegment(wx, wz, runBottom, runTop + 1,
+                    BuiltInRegistries.BLOCK.getKey(runBlock).toString()));
         }
     }
 }
