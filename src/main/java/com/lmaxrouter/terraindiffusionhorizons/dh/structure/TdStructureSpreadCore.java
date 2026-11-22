@@ -132,10 +132,11 @@ public final class TdStructureSpreadCore implements LaneCore {
     }
 
     /**
-     * 四频率法逐指令镜像 [字节码实证]. 两个容易抄错点:
+     * 四频率法逐指令镜像 [字节码实证; 长期记忆: 163]. 两个容易抄错点:
      * ① default 的实参序 setLargeFeatureWithSalt(seed, salt, x, z) — 盐占 gridX 槽
-     *    (vanilla 源码即此形状, 非笔误); ② legacy_type_3 的盐是硬编码 10387320
-     *    (vanilla 常量, json salt 不参与 — 唯一进代码的 vanilla 数字, 字节码出处)。
+     *    (vanilla 源码即此形状, 非笔误);
+     * ② legacy_type_2 的盐是硬编码 10387320 (vanilla 常量, json salt 不参与),
+     *    而 legacy_type_3 无盐参与 — 勿再对调。
      * 未知 method 放行: superset 偏置, /locate 包含性协议的安全侧。
      */
     private boolean frequencyPass(StructureSetParams p, long seed, int x, int z) {
@@ -157,13 +158,15 @@ public final class TdStructureSpreadCore implements LaneCore {
             }
             case "legacy_type_2" -> {
                 WorldgenRandom wr = new WorldgenRandom(new LegacyRandomSource(0L));
-                wr.setLargeFeatureSeed(seed, x, z);
-                return wr.nextDouble() < freq;
+                // [长期记忆: 163] type_2 = WithSalt + nextFloat, 盐为 vanilla 硬编码 10387320 (json salt 不参与)
+                wr.setLargeFeatureWithSalt(seed, x, z, 10387320);
+                return wr.nextFloat() < freq;
             }
             case "legacy_type_3" -> {
                 WorldgenRandom wr = new WorldgenRandom(new LegacyRandomSource(0L));
-                wr.setLargeFeatureWithSalt(seed, x, z, 10387320);
-                return wr.nextFloat() < freq;
+                // [长期记忆: 163] type_3 = setLargeFeatureSeed + nextDouble, 无盐参与
+                wr.setLargeFeatureSeed(seed, x, z);
+                return wr.nextDouble() < freq;
             }
             default -> {
                 return true;
