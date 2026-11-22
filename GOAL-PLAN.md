@@ -528,3 +528,13 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 改动三处 (Generator): ① 基础段 → 三明治循环 + 尾垫 (B案换色列顶格段让位 1 格防重叠; wrapper 失败降 air; 钳位/退化防御; 零埋地列输出与旧版逐字节等价 = 回归安全); ② 旧独立水段发射删除, 并入尾垫; ③ 平铺端仅改注释. 弃点: 帽上 1 格夹缝段; 窗口外顶格结构列花帽仍可掷 (B案既有边缘, 未动).
 - 构建波折: TD_MIRROR 四件套漏设四犯 [长期记忆: 089, 药方在回执里只喂了 --offline], 白耗两轮; 四件套 + --offline 10s 绿. 部署 80876B (C批 79828B +1048B) MD5 双绿; world15 sqlite 149MB 删 (wal/shm 不在场); commit 68a0463.
 - 待实测: ① 海里 monument/沉船 — 斜角/剖面看, 俯视 topmost 大概率仍水色 (DH 列式渲染顶面取色), 若俯视也不可见 → 迭代方向 = 水面换色 (B案水版, 改动极小); ② 山壁矿井/要塞剖面色带; ③ 村庄路/农田 scol 不回归; ④ FPS (埋地列段数 ~3 → 至 ~15); ⑤ 日志 grep gap/overlap + placeInChunk 基线对比.
+
+## 2026-11-23 早晨 · E批·SpreadCore 频率门对调 (幽灵矿井走廊修复闭环)
+
+- 动机 (max V6 实地五发后实测): DH 远景存在矿井走廊 (幽灵), vanilla 实际无对应生成 — 频率门撒点与真实生成不同源错位。
+- 根因 [长期记忆: 163]: TdStructureSpreadCore 频率门 type_2/type_3 两 case 数学对调 — legacy_type_2 应为 setLargeFeatureWithSalt(seed,x,z,10387320)+nextFloat, legacy_type_3 应为 setLargeFeatureSeed(seed,x,z)+nextDouble, 原实现互吃错门。证据链三层互证: 字节码 BootstrapMethods + mojang 反编译源码 + V6 实地五发。影响面: vanilla 全数据包仅 mineshafts(type_3) 与 buried_treasures(type_2) 踩此两门, 一处对调双治; 宝藏侧依 max 拍板不验 (数学同源)。
+- 修复: commit d016b21 (+10/-7) — 两 case 对调 + 各 case 内 [长期记忆:163] 引用注释 + javadoc 勘误 (标明 legacy_type_2 的盐, 勿再对调)。
+- 构建波折 [长期记忆: 165]: 裸跑四件套漏设 = 第五犯 (089 药方在档知而不用); 补四件套后 --offline 仍死 = nashorn-core-15.3 (NFRT 传递依赖) 双 home modules-2 均无缓存, 此前 offline 快构建的隐含前提 = createMinecraftArtifacts UP-TO-DATE 不触发解析; 正解 = 四件套 + 在线 (repo.maven.apache.org 直连可达), 22s 绿。
+- 部署: jar 80877B, MD5 对账过; 旧 80876B 备份 .jar.bak-20261123 (删否归 max)。新旧净差 1B = reobf 压缩巧合, 部署 hash 已对。
+- 终验 (max 实测通过): /tp -1488 80 2620 (V6 五发位) DH 幽灵矿井走廊消失, 频率门计算与 vanilla 实际生成对齐, E 批闭环 [长期记忆: 164]。
+- 遗留 (非阻塞): ① TdStructureAssembleCore.java 编译 deprecation 注记 (既有代码, 非本案引入, 未排查); ② .agent/ 三文件 git 常脏 (框架状态, 11-17 max 已定夺入库不 ignore, 本案未提交它们)。
