@@ -125,7 +125,7 @@ written 块优先; written.isAir() 且近似实心 → 给近似块 (树干穿�
 1. **默认装饰步集**: A. 仅 `VEGETAL_DECORATION` + `TOP_LAYER_MODIFICATION` (k=9,10, 观感层最小集) / B. 全 11 步。推荐 A: 地下步 (ore/lake/dungeon) 在 LOD 无消费者, 纯算力。可配 `featureSteps` 列表。
 2. **花草帽段共存**: L4 段列禁帽段 (推荐, 高 detail 帽段继续用) / L4 上线全局关帽段。
 3. **L3 随机源勘误**: 随本批一并修 (推荐, §2 一行) / 单独批。
-4. **TdVegetationMap**: L4 TEST 验证后退役删除 (现 vegEnabled 恒关, 不急)。
+4. **TdVegetationMap**: L4 TEST 验证后退役删除 (现 vegEnabled 恒关, 不急)。[已执行 2026-11-25, 案卷见 GOAL-PLAN "退役+清理案卷"]
 5. **detail 门控**: L4 只跑 dl0 (推荐: dl0 一列=1 块天然 1:1; dl1+ 列亚 DP 失真), 配置 `featureMaxDetail = 0`。
 
 ## 6. 风险与兜底

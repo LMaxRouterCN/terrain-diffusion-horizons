@@ -69,7 +69,7 @@ TDH 针对 DH 3.3.3 开发并实测通过。其余版本未测试。
 | `terrain.fillerBiome` | `minecraft:plains` | fallback 群系（data point 携带） |
 | `terrain.useBiomeSurface` | `true` | 群系驱动表面；false 退纯几何模式 |
 | `terrain.surfaceBlockOverrides` | `{}` | 群系 key → 方块 ID 稀疏覆盖，只覆地表字段 |
-| `vegetation.coloring` | `true` | L1 植被树冠近似（干列按群系密度叠树冠段） |
+| `vegetation.coloring` | `true` | L1 花草色斑：干列列顶按群系花池密度概率换花色（只取色，列高不变） |
 | `vegetation.grassColoring` | `false` | 草丛色斑留口（默认关：草丛与草方块共用 grass colormap） |
 | `structure.enabled` | `true` | 结构 LOD 车道总开关（同源撒点 + L3 组装） |
 | `structure.async` | `true` | 异步：地形 LOD 先出图，结构算完自动刷新补全 |
@@ -125,14 +125,13 @@ coloring = true
 | `TdDhWorldGenerator` | `IDhApiWorldGenerator` 实现，核心翻译循环 |
 | `TdLodTranslator` | DH 参数 → TD 查询坐标（纯函数，零状态） |
 | `TdSurfaceBlockMap` | 65 群系表面样式剪枝表 |
-| `TdVegetationMap` | 29 群系植被统计表（L1 树冠近似） |
 | `TdConfig` | 播种式 TOML 配置 |
 
 注册链：mod 构造期挂 `DhApiLevelLoadEvent` → 世界加载回调 → 三重守卫（主世界 / TD 世界激活 / seed 可得）→ `registerWorldGeneratorOverride`。世界卸载无反注册 API，由生成器自身 `close()` 清引用。只在主世界工作（硬边界）。
 
 ### 数据流
 
-DH 生成队列 → `generateLod(posX, posZ, dl0)` → `runAsync` 壳入 DH 池线程 → TD `getRiverTerrainData(块矩形, withBiomes)` 一次拉整块 64×64 → 四个数组（`elevation` 海拔米 / `waterMask` 水强度 0-255 / `waterSurface` 液面米 / `biomeIndexes` 群系索引）→ 双循环每列翻译成 1~3 个 `DhApiTerrainDataPoint`（表面段 / 树冠段 / 水段 / 空气段；树冠与水互斥）→ `setApiDataPointColumn` → `resultConsumer` 恰一次回执。
+DH 生成队列 → `generateLod(posX, posZ, dl0)` → `runAsync` 壳入 DH 池线程 → TD `getRiverTerrainData(块矩形, withBiomes)` 一次拉整块 64×64 四数组（`elevation` 海拔米 / `waterMask` 水强度 0-255 / `waterSurface` 液面米 / `biomeIndexes` 群系索引）+ 结构/装饰车道列段（地形先出图，车道算完刷新补全）→ 双循环每列翻译成若干 `DhApiTerrainDataPoint`（床/表面段、结构折叠段、水段、花草帽段、空气段，列内无缝平铺）→ `setApiDataPointColumn` → `resultConsumer` 恰一次回执。
 
 只供 API dl0（64 块/列，即 core 级 dl6），粗档由 DH 原生 DOWN_SAMPLED 下采样。
 
@@ -163,9 +162,9 @@ TD chunk 侧的表面方块 = vanilla `SurfaceSystem.buildSurface` × TD BiomeSo
 - 弱水（强度 <72）：沙 62.5% / 砾 37.5%
 - 强水（≥72）：砾 85.2% / 黏土 14.8%
 
-### 植被（L1 统计近似）
+### 植被（L1 花草色斑）
 
-`vegetation.coloring` 开启时，干列按群系植被密度查表（29 群系，`TdVegetationMap`）生长树冠段；确定性空间散列决定该列是否长树与树冠高度——同一列永不跳变。树冠段与水段互斥。属观感近似、非与 chunk 生成同源；L4 地物同源落地后由真实数据替代。
+`vegetation.coloring` 开启时，干列列顶按群系花池密度做确定性哈希换色——命中列顶面取花色、列高不变（花/草为 cross 方块，DH 顶面取色生效）；同一列永不跳变。L4 装饰车道落地的列由真实装饰接管，帽段自动让位；其余列继续由本层补观感。属统计近似、非与 chunk 生成同源。
 
 ### 性能设计
 
@@ -228,7 +227,7 @@ When a world is freshly created, DH needs a warm-up: a large batch of chunks is 
 | `terrain.fillerBiome` | `minecraft:plains` | Fallback biome (carried by data points) |
 | `terrain.useBiomeSurface` | `true` | Biome-driven surface; false = pure-geometry mode |
 | `terrain.surfaceBlockOverrides` | `{}` | Sparse biome-key to block-ID overrides, surface field only |
-| `vegetation.coloring` | `true` | L1 vegetation canopy approximation (dry columns get canopies by biome density) |
+| `vegetation.coloring` | `true` | L1 flower speckle: dry column tops swap to flower colors by biome flower-pool density (color only, height unchanged) |
 | `vegetation.grassColoring` | `false` | Grass speckle toggle (off by default: grass shares the grass-block colormap) |
 | `structure.enabled` | `true` | Structure LOD lane master switch (same-seed placement + L3 assembly) |
 | `structure.async` | `true` | Async: terrain LOD publishes first, structures refresh in when done |
@@ -268,7 +267,7 @@ Config file: `config/terrain-diffusion-mc/terrain-diffusion-horizons.toml` (a co
 | `terrain.fillerBiome` | `minecraft:plains` | Fallback biome (carried by data points) |
 | `terrain.useBiomeSurface` | `true` | Biome-driven surface; false = pure-geometry mode |
 | `terrain.surfaceBlockOverrides` | `{}` | Sparse biome-key to block-ID overrides, surface field only |
-| `vegetation.coloring` | `true` | L1 vegetation canopy approximation (dry columns get canopies by biome density) |
+| `vegetation.coloring` | `true` | L1 flower speckle: dry column tops swap to flower colors by biome flower-pool density (color only, height unchanged) |
 
 ```toml
 [general]
@@ -304,14 +303,13 @@ No mixins, no Access Transformers, no reflection—everything goes through the t
 | `TdDhWorldGenerator` | `IDhApiWorldGenerator` implementation, the core translation loop |
 | `TdLodTranslator` | DH params to TD query coordinates (pure function, stateless) |
 | `TdSurfaceBlockMap` | 65-biome surface-style pruned table |
-| `TdVegetationMap` | 29-biome vegetation statistics table (L1 canopy approximation) |
 | `TdConfig` | seeded TOML config |
 
 Registration chain: the mod constructor hooks `DhApiLevelLoadEvent`, then the world-load callback runs a triple guard (overworld / TD world active / seed obtainable) and calls `registerWorldGeneratorOverride`. There is no unregister API on world unload; the generator clears its own references in `close()`. Overworld only (hard boundary).
 
 ### Data flow
 
-DH generation queue → `generateLod(posX, posZ, dl0)` → `runAsync` shell onto a DH pool thread → TD `getRiverTerrainData(block rectangle, withBiomes)` pulls a whole 64×64 block at once → four arrays (`elevation` in meters / `waterMask` water intensity 0-255 / `waterSurface` water level in meters / `biomeIndexes` biome indices) → a double loop translates each column into 1-3 `DhApiTerrainDataPoint`s (surface / canopy / water / air segments; canopy and water are mutually exclusive) → `setApiDataPointColumn` → `resultConsumer` called exactly once.
+DH generation queue → `generateLod(posX, posZ, dl0)` → `runAsync` shell onto a DH pool thread → TD `getRiverTerrainData(block rectangle, withBiomes)` pulls a whole 64×64 block at once (four arrays: `elevation` in meters / `waterMask` water intensity 0-255 / `waterSurface` water level in meters / `biomeIndexes` biome indices) plus structure/decoration lane column segments (terrain publishes first, lanes refresh in when done) → a double loop translates each column into several `DhApiTerrainDataPoint`s (bed/surface, folded structure, water, flower cap, air; seamlessly tiled per column) → `setApiDataPointColumn` → `resultConsumer` called exactly once.
 
 API dl0 only (64 blocks per column, i.e. core-level dl6); coarser levels come from DH's native DOWN_SAMPLED downsampling.
 
@@ -342,9 +340,9 @@ Riverbed material is tiered by water intensity with deterministic spatial hashin
 - Weak water (intensity <72): sand 62.5% / gravel 37.5%
 - Strong water (≥72): gravel 85.2% / clay 14.8%
 
-### Vegetation (L1 statistical approximation)
+### Vegetation (L1 flower speckle)
 
-With `vegetation.coloring` enabled, dry columns grow canopies via a per-biome vegetation density table (29 biomes, `TdVegetationMap`); deterministic spatial hashing decides whether a column gets a tree and its canopy height—the same column never flickers. Canopy and water segments are mutually exclusive. This is a visual approximation and not same-source with chunk generation; it will be replaced by real data once L4 lands.
+With `vegetation.coloring` enabled, dry column tops get deterministic-hash color swaps by biome flower-pool density—hit columns take the flower color on top while the column height stays unchanged (flowers/grass are cross blocks; only the top-face tint changes). The same column never flickers. Columns covered by the L4 decoration lane hand over to real decoration (the cap yields automatically); the rest keep this layer as visual fallback. Statistical approximation, not same-source with chunk generation.
 
 ### Performance design
 

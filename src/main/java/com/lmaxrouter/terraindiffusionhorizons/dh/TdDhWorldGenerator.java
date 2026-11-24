@@ -3,7 +3,6 @@ package com.lmaxrouter.terraindiffusionhorizons.dh;
 import com.github.xandergos.terraindiffusionmc.biome.TerrainBiomeRegistry;
 import com.github.xandergos.terraindiffusionmc.pipeline.LocalTerrainProvider;
 import com.github.xandergos.terraindiffusionmc.world.HeightConverter;
-import net.minecraft.world.level.biome.Biome;
 import com.lmaxrouter.terraindiffusionhorizons.TdConfig;
 import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LaneManagers;
 import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LanePayload;
@@ -162,9 +161,8 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         // 案②α: withBiomes 门控 (内存 ~520MB vs ~150MB, TEST 实测; config 关掉即退纯几何模式)
         TdConfig cfg0 = TdConfig.get();
         boolean withBiomes = cfg0.useBiomeSurface;
-        // [max 2026-11-18 裁决] L1 树格(含竹层)属地物范畴且半成品跳级, 配置控制断开恒关;
-        // 代码保留待地物批参考, 地物批落地后整块退役; vegetationColoring 归还花草上色层 [长期记忆: 126]
-        boolean vegEnabled = false;
+        // [长期记忆: 126] L1 虚拟树格按 max 2026-11-18 裁决整块退役 (L4 装饰车道同源落地, 2026-11-25 执行);
+        // vegetationColoring = 花草色斑层, 不受影响.
         int[] b = TdLodTranslator.dataSourceBlockBounds(posX, posZ, detailLevel, cols);
         LocalTerrainProvider.RiverTerrainData data;
         try {
@@ -397,140 +395,8 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                     // 修: 帽段发射后抬 coverTop, 尾段 air 从帽上起 (solidTop+1<=maxY 由外层 if 守卫保证).
                     coverTop = solidTop + 1;
                 }
-                // [半成品·停用 2026-11-18 max裁决] L1 植被虚拟树格 (含竹层), 地物范畴半成品:
-                // 跳级+形状bug+配置接错 → 配置断开恒关 (vegEnabled=false), 代码保留待地物批参考.
-                // 现状清单:
-                // ① 发射bug(未修): 块形冠段无离心调制 = 立方体树冠 (实测筷子插豆腐), 见下方冠段BUG标注;
-                //    Chebyshev 距离方角 = 另一小病灶 (角落补刀可修, 未修).
-                // ② 已实测验证: 悬空冠段+冠下 air 段渲染协议通过 [长期记忆: 115 结案]; tint 链生效.
-                // ③ 未验证: 云杉锥形观感 / cherry 垂叶 / pink_petals 机制.
-                // ④ 数据侧 (TdVegetationMap) 无罪: 表驱动, 字段全带 json/javap 出处.
-                // 下接原设计备忘 (内容继续有效, 半成品现状以上述清单为准):
-                // L1 植被虚拟树格 [长期记忆: 123 勘误: dl0 列 = 1x1 块; 旧 density 观感标定表已退役]:
-                // 世界按 cell 划格, 每 cell 确定性哈希恰一棵树 (格内抖动 / 池权重 / 干高 =
-                // trunkBase+U(0,randA)+U(0,randB) 双独立哈希, vanilla trunk_placer 双 nextInt 同构);
-                // 树心列 = 干段(log)+冠段, 冠半径列 = 悬空冠段锚定树心干顶, 冠下缝隙显式 air 段
-                // (列内点自底向上无缝平铺协议).
-                // [临时] [长期记忆: 106] feature 层近似, L4 地物同源落地后退役.
-                // [长期记忆: 115] 悬空冠段渲染行为未实测 (旁证 = vanilla DH 卸载林子的树冠段), TEST 验.
-                if (vegEnabled && !waterCol && style.veg != null && style.logs != null) {
-                    int gx = b[1] + x; // b = [i1(Z起), j1(X起), i2, j2] -> gx/gz = 世界块坐标
-                    int gz = b[0] + z;
-                    TdVegetationMap.VegStat veg = style.veg;
-                    int cell = veg.cell;
-                    int cix = Math.floorDiv(gx, cell);
-                    int ciz = Math.floorDiv(gz, cell);
-                    // 预判: 本列是否自己格的树心 (树心列不放竹; 与格循环同哈希源)
-                    long ph = mix64(expectedSeed + cix * 0x9E3779B1L + ciz * 0x85EBCA77L + 0x2545F491L);
-                    int pjx = (int) Long.remainderUnsigned(ph, cell);
-                    ph = mix64(ph);
-                    int pjz = (int) Long.remainderUnsigned(ph, cell);
-                    boolean selfTrunk = cix * cell + pjx == gx && ciz * cell + pjz == gz;
-                    int cursor = solidTop; // 已写段顶游标
-                    // 竹噪声列层 (bamboo_jungle): 命中概率 = vanilla 噪声 count / 256;
-                    // count = ceil((BIOME_INFO_NOISE(x/80, z/80) + 0.3) * 160) [NoiseBasedCountPlacement 同构],
-                    // 噪声 = Biome 静态字段 (固定种子 1234, 世界无关) 直引零构造;
-                    // 采样取 chunk 中心 (vanilla 装饰协议), 忠实复刻竹丛 chunk 块状密度
-                    if (veg.bamboo && !selfTrunk && style.bamboo != null) {
-                        int ccx = (gx >> 4) * 16 + 8;
-                        int ccz = (gz >> 4) * 16 + 8;
-                        double bn = Biome.BIOME_INFO_NOISE.getValue(ccx / 80.0, ccz / 80.0, false); // [deprecation 有意] 上游废弃标记不跟随: 该字段就是 vanilla 竹丛密度的本尊 (固定种子 1234, 世界无关)
-                        int bcnt = (int) Math.ceil((bn + 0.3) * 160);
-                        if (bcnt > 0) {
-                            long bz = mix64(expectedSeed + gx * 0x27D4EB2FL + gz * 0x165667B1L + 0xB5026F5AL);
-                            if (Long.remainderUnsigned(bz, 256) < bcnt) {
-                                // 竿高 5-16 [BambooFeature javap: 5 + nextInt(12)]
-                                int btop = Math.min(solidTop + 5 + (int) Long.remainderUnsigned(bz >>> 32, 12), maxY);
-                                if (btop > cursor) {
-                                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, cursor, btop, style.bamboo, style.biome));
-                                    cursor = btop;
-                                }
-                            }
-                        }
-                    }
-                    // 邻域 cell 反查 (radiusCells 格, 覆盖充分性由 TdVegetationMap 静态校验)
-                    for (int aj = ciz - veg.radiusCells; aj <= ciz + veg.radiusCells; aj++) {
-                        for (int ai = cix - veg.radiusCells; ai <= cix + veg.radiusCells; ai++) {
-                            // cell 树哈希: 种子 + 格坐标, splitmix64 链 (派生值独立再混合, 同格永不跳变)
-                            long hz = mix64(expectedSeed + ai * 0x9E3779B1L + aj * 0x85EBCA77L + 0x2545F491L);
-                            int jx = (int) Long.remainderUnsigned(hz, cell); // 格内抖动
-                            hz = mix64(hz);
-                            int jz = (int) Long.remainderUnsigned(hz, cell);
-                            int tx = ai * cell + jx; // 树心世界坐标
-                            int tz = aj * cell + jz;
-                            int dc = Math.max(Math.abs(gx - tx), Math.abs(gz - tz)); // Chebyshev 距离
-                            if (dc > veg.maxCanopyR) continue; // 快速剔除 (池内最大半径)
-                            hz = mix64(hz);
-                            int sel = (int) Long.remainderUnsigned(hz, 1000); // 树种 (池权重千分比)
-                            hz = mix64(hz);
-                            int hA = (int) (hz >>> 32); // 干高窗口 A (兼双倍茎判定)
-                            int hB = (int) hz; // 干高窗口 B
-                            // 池权重前缀和选型 (千分比; wrapper 取失败的型跳过 = 该格无树)
-                            TdVegetationMap.TreeType type = null;
-                            IDhApiBlockStateWrapper logW = null, leafW = null;
-                            int acc = 0;
-                            for (int pi = 0; pi < veg.pool.length; pi++) {
-                                acc += veg.pool[pi].weight;
-                                if (sel < acc) {
-                                    type = veg.pool[pi].type;
-                                    logW = style.logs[pi];
-                                    leafW = style.leaves[pi];
-                                    break;
-                                }
-                            }
-                            if (type == null || logW == null || leafW == null) continue;
-                            // 干高: vanilla trunk_placer 同构 (双 nextInt 独立分布)
-                            int trunkH = type.trunkBase + Math.floorMod(hA, type.randA + 1) + Math.floorMod(hB, type.randB + 1);
-                            // 巨型蘑菇双倍茎: 概率命中时茎高翻倍 [javap AbstractHugeMushroomFeature.getTreeHeight]
-                            if (type.doubleStemPermille > 0 && Math.floorMod(hA >>> 16, 1000) < type.doubleStemPermille) {
-                                trunkH *= 2;
-                            }
-                            // 树心地面: elevation[树心] (树心可能在界外, clamp 进数组取近似)
-                            int ax = Math.min(Math.max(tx - b[1], 0), width - 1);
-                            int az = Math.min(Math.max(tz - b[0], 0), width - 1);
-                            int treeGround = clampY(HeightConverter.convertToMinecraftHeight((short) elev[TdLodTranslator.sampleIndex(ax, az, width)]) - minY, dataBottom, maxY);
-                            int tt = treeGround + trunkH; // 树心干顶 (冠锚点)
-                            if (dc == 0) {
-                                // 树心列: 干段 [cursor, 冠底) (conical 冠底低于干顶, 干止于冠底;
-                                // 邻树高冠已越过本冠底时干段被吞 — 观感无碍, 干本就藏于冠内)
-                                int crownBottom = type.conical ? tt - type.canopyH + 1 : tt;
-                                int segEnd = Math.min(Math.max(crownBottom, cursor), maxY);
-                                if (segEnd > cursor) {
-                                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, cursor, segEnd, logW, style.biome));
-                                    cursor = segEnd;
-                                }
-                            }
-                            // 冠段: 锥形 (距树心越远越窄底越高) / 块形 (干顶上 canopyH 厚悬空冠)
-                            // [BUG·停用未修 2026-11-18] 块形 else 分支 cb/ct 与离心 dc 无关 = 全列同一 y 区间 = 立方体树冠;
-                            // 修法 = 离心衰减推广 (dc=0 满厚, 边缘矮半截), 见上方树格块现状清单
-                            int cb;
-                            int ct;
-                            if (type.conical) {
-                                cb = tt - type.canopyH + 1 + dc;
-                                ct = cb + Math.max(1, type.canopyH - 2 * dc);
-                            } else {
-                                cb = tt;
-                                ct = tt + type.canopyH;
-                            }
-                            if (ct > maxY) {
-                                ct = maxY;
-                            }
-                            if (ct > cursor && ct > solidTop) {
-                                int segB = Math.max(cb, Math.max(cursor, solidTop));
-                                if (segB < ct) {
-                                    if (segB > cursor) { // 悬空冠下缝隙: 显式 air 段 (无缝平铺协议)
-                                        points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, cursor, segB, airBlock, style.biome));
-                                    }
-                                    points.add(DhApiTerrainDataPoint.create(detailLevel, 0, 15, segB, ct, leafW, style.biome));
-                                    cursor = ct;
-                                }
-                            }
-                        }
-                    }
-                    coverTop = cursor; // 结构顶 (尾段空气由下方公共 coverTop < maxY 分支写)
-                }
                 // [D批] 水段并入上方基础三明治尾垫 (水列: 床到海床 + 水到水面, 埋地结构切分其中);
-                // 旧独立发射删除 — waterCol 门语义不变 (树仅干列, 干列树冠抬高的 coverTop 从不触发水段)
+                // 旧独立发射删除 — waterCol 门语义不变 (花草帽段仅干列, 从不抬水列 coverTop; 树格 parenthetical 随 2026-11-25 退役改述)
                 // ==== [L3] 结构段链平铺 (C 批合并点; C-light 多段) ====
                 // 列链 top-down, 倒读自底向上平铺: sT <= coverTop 跳过 = 埋地段已由基础三明治发射
                 // (D批; 帽上 1 格夹缝段弃); 段被截断 (sBottom < coverTop) 裁剪;
@@ -587,7 +453,7 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         }).orElse(null);
     }
 
-    /** splitmix64 弱哈希终轮: 树格/竹列确定性随机的充分混合 (无状态, 线程安全). */
+    /** splitmix64 弱哈希终轮: 花草色斑等列级确定性随机的充分混合 (无状态, 线程安全). */
     private static long mix64(long z) {
         z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
         z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
@@ -611,7 +477,7 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
             gravelBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:gravel", levelWrapper);
             clayBlock = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:clay", levelWrapper);
             // 案②α: fallback 样式 = 纯几何模式旧路径 (表面=水下=cfg.surfaceBlock, 无冰盖; 无植被)
-            fallbackStyle = new ColumnStyle(surfaceBlock, surfaceBlock, fillerBiome, false, null, null, null, null, null);
+            fallbackStyle = new ColumnStyle(surfaceBlock, surfaceBlock, fillerBiome, false, null);
             return true;
         } catch (Exception e) {
             LOG.warn("wrapper 获取失败 (配置: surface={} biome={}): {}", cfg.surfaceBlock, cfg.fillerBiome, e.toString());
@@ -683,37 +549,22 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         // 尾部空槽收缩 (全限定免 import)
         return new VegPool(java.util.Arrays.copyOf(wrappers, cnt), java.util.Arrays.copyOf(prefix, cnt), total, permille);
     }
-    /** 不可变列样式: 表面/水下方块 wrapper + 群系 wrapper + 冰盖标志 + L1 植被/花草参数. */
+    /** 不可变列样式: 表面/水下方块 wrapper + 群系 wrapper + 冰盖标志 + L1 花草参数. */
     private static final class ColumnStyle {
         final IDhApiBlockStateWrapper surface;
         final IDhApiBlockStateWrapper underwater;
         final IDhApiBiomeWrapper biome;
         final boolean iceCover;
-        /** L1 植被统计参数 (无植被群系/纯几何模式 = null). */
-        final TdVegetationMap.VegStat veg;
-        /** 池对齐的干方块 wrapper (veg = null 时 null; 单型失败 = null, 该型树跳过). */
-        final IDhApiBlockStateWrapper[] logs;
-        /** 池对齐的冠方块 wrapper (与 logs 同索引). */
-        final IDhApiBlockStateWrapper[] leaves;
-        /** 竹方块 wrapper (veg.bamboo = false 时 null). */
-        final IDhApiBlockStateWrapper bamboo;
         /** L1 花草色斑样式 (无花草群系/纯几何模式 = null; 草池数据照建, 消费 gate 在发射端). */
         final FlowerStyle flower;
 
         ColumnStyle(IDhApiBlockStateWrapper surface, IDhApiBlockStateWrapper underwater,
                     IDhApiBiomeWrapper biome, boolean iceCover,
-                    TdVegetationMap.VegStat veg,
-                    IDhApiBlockStateWrapper[] logs, IDhApiBlockStateWrapper[] leaves,
-                    IDhApiBlockStateWrapper bamboo,
                     FlowerStyle flower) {
             this.surface = surface;
             this.underwater = underwater;
             this.biome = biome;
             this.iceCover = iceCover;
-            this.veg = veg;
-            this.logs = logs;
-            this.leaves = leaves;
-            this.bamboo = bamboo;
             this.flower = flower;
         }
     }
@@ -741,32 +592,6 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
         TdConfig cfg = TdConfig.get();
         String surfaceId = cfg.surfaceBlockOverrides.getOrDefault(key, TdSurfaceBlockMap.surface(key));
         try {
-            // L1: 植被参数 (独立内层 try — 池 wrapper 失败仅退化该群系植被, 不连坐 style 本体)
-            TdVegetationMap.VegStat veg = TdVegetationMap.vegetation(key);
-            IDhApiBlockStateWrapper[] logs = null;
-            IDhApiBlockStateWrapper[] leaves = null;
-            IDhApiBlockStateWrapper bamboo = null;
-            if (veg != null) {
-                try {
-                    logs = new IDhApiBlockStateWrapper[veg.pool.length];
-                    leaves = new IDhApiBlockStateWrapper[veg.pool.length];
-                    for (int pi = 0; pi < veg.pool.length; pi++) {
-                        try {
-                            logs[pi] = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(veg.pool[pi].type.log, levelWrapper);
-                            leaves[pi] = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(veg.pool[pi].type.leaves, levelWrapper);
-                        } catch (Exception ve) {
-                            logs[pi] = null; // 单型失败 = 该型树跳过 (观感少一种树, 样式本体不受连坐)
-                            leaves[pi] = null;
-                        }
-                    }
-                    if (veg.bamboo) {
-                        bamboo = DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper("minecraft:bamboo", levelWrapper);
-                    }
-                } catch (Exception ve) {
-                    logs = null; // 整池失败 = 观感无植被
-                    leaves = null;
-                }
-            }
             // L1 花草色斑样式: 花池草池都建 (草池 = 留口数据, 消费 gate 在发射端 cfg.grassColoring);
             // 池失败仅退化该群系花草, 不连坐 style 本体 (与 veg 池同策略)
             FlowerStyle flowerStyle = null;
@@ -783,7 +608,7 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                     DhApi.Delayed.wrapperFactory.getDefaultBlockStateWrapper(TdSurfaceBlockMap.underwater(key), levelWrapper),
                     DhApi.Delayed.wrapperFactory.getBiomeWrapper(key, levelWrapper),
                     TdSurfaceBlockMap.iceCover(key),
-                    veg, logs, leaves, bamboo, flowerStyle);
+                    flowerStyle);
             styleCache.put(key, s);
             return s;
         } catch (Exception e) {

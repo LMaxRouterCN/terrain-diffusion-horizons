@@ -585,4 +585,29 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 缓存诊断: F 批部署后"还是原样" = 329MB 旧 DH 库回放坏 LOD (16 世界库仅 (15) 活跃); 锚名 .bak-20261125 隔离, 新库从零长 458MB.
 - 注记: 方格 (案④) max 未单独回报, prefetch 已落地, 下次留意; pale_garden biome WARN ×1 = DH 自身噪声 (1.20.1 无此 biome).
 - commit: 车道 + 排障修复打包一 commit (中途未打过 F 批中间态, 按文件拆会把修复混入, 历史失真), version 0.1.0 → 0.1.1 (0.1.0 已以坏行为版本存在过).
+- 遗留: ①②③ 已于 2026-11-25 全部收口 (树格退役执行 / §7 排版销案·现场核查正常 / 锚清理 ~462MB), 见下方 "2026-11-25 · 退役+清理案卷".
 - 遗留: ①TdVegetationMap 退役 (决策④) ②设计稿 §7 排版事故 (勘误块拦腰截表) ③锚清理待 max: mods 0.1.0.jar.bak-20261125 + .bak-20261123 + (15)库 .bak-20261125 (329MB) + D:\temp\dh-sqlite-bak-20261124.
+
+## 2026-11-25 · 退役+清理案卷 (L1 树格退役 / 锚清理 / §7 销案)
+
+- L1 虚拟树格退役 (设计稿决策④ + max 2026-11-18 裁决 [长期记忆: 126] 的既定执行):
+  TdVegetationMap.java 整文件删除 (29 群系统计表, git 历史可溯). TdDhWorldGenerator 删
+  (行号为手术前): 树格发射块 L400-531 (vegEnabled 恒假死门, 11-18 起零可达) / ColumnStyle
+  的 veg·logs·leaves·bamboo 四字段与构造 / resolveStyle 植被池构造 (红利: 每群系样式构造
+  省喂死数据的 wrapper 工厂调用) / Biome import (竹噪声层唯一消费者). 花草层不连坐 (裁决
+  原文 "vegetationColoring 归还花草上色层"): vegetationColoring / TdFlowerMap / VegPool /
+  FlowerStyle / 帽段发射全保留. 行为零变化, version 维持 0.1.1 (纯死码删除), mods 部署同步.
+- 排障记录 (协作质量): 初判 "非死代码" 系双重失误 — ① grep 'Vegetation' 大小写漏 vegEnabled
+  ② 设计稿 L128 "现 vegEnabled 恒关" 被读反; 二轮 grep 铁证翻案 (L167 硬编码 false + 注释
+  嵌裁决原文). 教训: 开关名 grep 必须全小写; 决策文档的前提句逐字读.
+- 锚清理 (max 批准 "23干了吧"): mods 0.1.0.jar.bak-20261125 + .bak-20261123 + (15) 库坏
+  缓存 .bak-20261125 (329MB) + D:\temp\dh-sqlite-bak-20261124 (目录 155MB), 共释放 ~462MB.
+  历史版本 git 可重建.
+- 设计稿 §7 排版事故销案: 现场核查 L138-158 表体完整 (9 行 + Config 行 L149 在表内), 勘误
+  块 L153-158 在表后 — 旧记录 "拦腰截断" 失实 (疑施工期已顺手修复未记), 无残留动作.
+- README 同步: vegetation.coloring 描述改花草色斑 (旧 "树冠近似" 文案自 11-18 断开起失实
+  7 天), 架构表 TdVegetationMap 行删 (双语), 数据流段树冠措辞改并补车道输入.
+- 遗留 (呈 max): ①README 性能节 "ArrayList(3) 预分配 / 段数上限 3" 疑随 C/D 批过时 (代码
+  grep 见当轮日志, 未动) ②英文 Installation 后 L246-252 疑裸 TOML 无围栏 (当轮日志有现场,
+  未动) ③EN L316 "64 blocks per column" 措辞疑旧错 (dl0 一列 = 1 块, [长期记忆: 123]; CN
+  对照行未读, 未动) ④dl1+ 远景无树 = 11-18 起现状, 高 detail 植被归后续路线 ⑤push 未决.
