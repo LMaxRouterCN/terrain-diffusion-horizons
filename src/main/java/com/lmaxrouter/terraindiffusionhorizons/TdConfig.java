@@ -79,6 +79,19 @@ public final class TdConfig {
 
     /** [features] 地物车道异步 (语义同 structure.async). */
     public boolean featuresAsync = true;
+    /** [L4] 装饰步集: GenerationStep.Decoration 枚举名表 (装配期解析, 大小写不敏感; 空/全 miss = 装饰 no-op).
+     *  默认步集 A (决策①): 植被 + 顶雪 — LOD 可见层; 矿/湖/泉类步对 LOD 无益不入. */
+    public List<String> decorationSteps = List.of("vegetal_decoration", "top_layer_modification");
+    /** [L4] 装饰门控 (决策⑤, API 级档位): detailLevel > 此值的 region 不跑装饰 (0 = 只 dl0, 与地形车道同档). */
+    public int decorationMaxDetailLevel = 0;
+
+    /** [L4·排障] 装饰窗 heightmap prefetch (方案1): far-lookup 会话外预取并驻留, 装饰期
+     *  mixin 高度查询走 resident 真值 (修方格错树); false = 回退旧近似路径 (且无水背景数据). */
+    public boolean decorationPrefetch = true;
+
+    /** [L4·排障] 装饰三态水背景 (方案2): 数据窗内背景 = 床下草/水柱/水上空气 (修湖上浮树浮花);
+     *  false = 回退旧两态 (y < envH 草). 依赖 prefetch 数据, prefetch 关闭时此开关无效. */
+    public boolean decorationWaterBackground = true;
 
     // ---- 加载与播种 ----
 
@@ -146,6 +159,16 @@ public final class TdConfig {
         cfg.structureSurfaceBlendDepth = c.getOrElse(List.of("structure", "surface_blend_depth"), 3);
         cfg.featuresEnabled = c.getOrElse(List.of("features", "enabled"), Boolean.TRUE);
         cfg.featuresAsync = c.getOrElse(List.of("features", "async"), Boolean.TRUE);
+        // [L4] 装饰步集: TOML 数组 -> List<String> (非串元素剔除; 缺键 = 字段默认)
+        Object rawSteps = c.get(List.of("features", "decoration_steps"));
+        if (rawSteps instanceof List<?> stepList) {
+            cfg.decorationSteps = stepList.stream()
+                    .filter(String.class::isInstance).map(String.class::cast).toList();
+        }
+        cfg.decorationMaxDetailLevel = c.getOrElse(List.of("features", "decoration_max_detail_level"), 0);
+        // [L4·排障] 方案1/2 开关 (缺键/类型不符 = 默认 true)
+        cfg.decorationPrefetch = c.getOrElse(List.of("features", "decoration_prefetch"), Boolean.TRUE);
+        cfg.decorationWaterBackground = c.getOrElse(List.of("features", "decoration_water_background"), Boolean.TRUE);
         // overrides: 子表 [terrain.surfaceBlockOverrides]; 缺失/类型不符 = 空 map
         Object raw = c.get(List.of("terrain", "surfaceBlockOverrides"));
         if (raw instanceof UnmodifiableConfig sub) {
@@ -210,5 +233,21 @@ public final class TdConfig {
             enabled = true
             # 异步: 语义同 [structure].async.
             async = true
+            # 装饰步集 (L4): 参与的生成步 (GenerationStep.Decoration 枚举名, 大小写不敏感).
+            # 默认步集 A = 植被 + 顶雪 (树/花/草/蘑菇/雪盖; 矿/湖/泉挖掘类步对 LOD 无益不入).
+            # 合法值: raw_generation, lakes, local_modifications, underground_structures,
+            #   surface_structures, strongholds, underground_ores, underground_decoration,
+            #   fluid_springs, vegetal_decoration, top_layer_modification
+            # 空数组 = 关闭装饰.
+            decoration_steps = ["vegetal_decoration", "top_layer_modification"]
+            # 装饰门控 (API 级档位): detailLevel > 此值的 region 不跑装饰.
+            # 默认 0 = 只 dl0 (与地形车道同档; 大档列稀, 装饰写不满单块列).
+            decoration_max_detail_level = 0
+            # 装饰窗 heightmap prefetch (排障方案1): far-lookup 会话外预取装饰窗 heightmap
+            # 并驻留, 装饰期高度查询走 resident 真值 (修方格错树); false = 回退旧近似路径.
+            decoration_prefetch = true
+            # 装饰三态水背景 (排障方案2): 数据窗内背景 = 床下草/水柱/水上空气 (修湖上浮树浮花);
+            # false = 回退旧两态. 依赖 prefetch 数据, prefetch 关闭时此开关无效.
+            decoration_water_background = true
             """;
 }

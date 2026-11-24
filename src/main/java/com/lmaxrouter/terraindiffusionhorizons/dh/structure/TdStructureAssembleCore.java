@@ -1,6 +1,7 @@
 package com.lmaxrouter.terraindiffusionhorizons.dh.structure;
 
 import com.github.xandergos.terraindiffusionmc.pipeline.LocalTerrainProvider;
+import com.github.xandergos.terraindiffusionmc.pipeline.LocalTerrainProvider.HeightmapData;
 import com.lmaxrouter.terraindiffusionhorizons.TdConfig;
 import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LaneCore;
 import com.lmaxrouter.terraindiffusionhorizons.dh.lane.LanePayload;
@@ -19,6 +20,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.levelgen.LegacyRandomSource;
+import net.minecraft.world.level.levelgen.RandomSupport;
+import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
 import net.minecraft.world.level.levelgen.WorldgenRandom;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
@@ -64,6 +67,9 @@ public final class TdStructureAssembleCore implements LaneCore {
         if (ctx == null) {
             return List.of(); // 未装配 (非 TD 世界 / 装配失败): 静默空载荷
         }
+        // [L4] 装饰门控 (决策⑤): API 级 detailLevel <= 配置门 + 步集非空 (装配失败/步集空 = no-op)
+        boolean decorate = detailLevel <= TdConfig.get().decorationMaxDetailLevel
+                && ctx.decorationSteps().length > 0;
         // region chunk 界 (与 SpreadCore.compute 同式; 数据源边长 2^(dl+2) chunk)
         int shift = detailLevel + 2;
         int rMinX = posX << shift;
@@ -75,13 +81,20 @@ public final class TdStructureAssembleCore implements LaneCore {
         int pad = TdConfig.get().structurePadChunks;
         List<StructureHit> hits = TdStructureSpreadCore.INSTANCE.computeRange(worldSeed,
                 rMinX - pad, rMinZ - pad, rMaxX + pad, rMaxZ + pad);
-        if (hits.isEmpty()) {
+        // [L4] hits.isEmpty 不再整体早退: 装饰独立于结构 (无结构 region 也装饰); 双空才退
+        if (hits.isEmpty() && !decorate) {
             return List.of();
         }
 
         TdSilentLevel level = new TdSilentLevel(ctx);
         List<BoundingBox> beardBoxes = new ArrayList<>(); // beard 系 bbox 收集 (surfaceHint 判定源 [长期记忆: 156])
         List<LanePayload> segments = new ArrayList<>();
+        // [L4·排障·方案1] 装饰窗 prefetch (far-lookup 会话外! 会话内冷 tile 只出近似数据
+        // 且无水数组): 冷 tile 在此走真推理并驻留, 装饰期 mixin 高度查询全走 resident 纯拷贝
+        // (修方格错树). 返回 data 兼作方案 2 水背景燃料; null (关/失败) = 回退旧路径.
+        HeightmapData decorData = decorate
+                ? TdBiomeDecorator.prefetchDecorationHeightmap(rMinX, rMinZ, rMaxX, rMaxZ)
+                : null;
         // far-lookup 会话: 高度采样走 coarse 捷径 (ThreadLocal 计数器, 车道线程自洽
         // [LocalTerrainProvider 实证]; 与 /locate 结构搜索同机制)
         LocalTerrainProvider.beginFarLookup();
@@ -96,7 +109,11 @@ public final class TdStructureAssembleCore implements LaneCore {
                     assembled++;
                 }
             }
-            if (assembled > 0) {
+            // [L4] 装饰: 结构循环后 (结构写入在场 = vanilla 装饰时结构已放), fold 前 (装饰写入参与折叠)
+            if (decorate) {
+                TdBiomeDecorator.decorateRegion(ctx, level, worldSeed, rMinX, rMinZ, rMaxX, rMaxZ, decorData);
+            }
+            if (!level.chunks().isEmpty()) { // [L4] 折叠条件放宽: 结构或装饰任一写入
                 foldColumns(level, beardBoxes,
                         rMinX << 4, rMinZ << 4, (rMaxX << 4) + 15, (rMaxZ << 4) + 15, segments);
                 LOG.info("[assemble] region dl{} +({},{}) -> {} 命中 / {} 组装 / {} 列段",
@@ -140,7 +157,7 @@ public final class TdStructureAssembleCore implements LaneCore {
             for (int cx = bb.minX() >> 4; cx <= bb.maxX() >> 4; cx++) {
                 ChunkPos cp = new ChunkPos(cx, cz);
                 // 每 chunk 独立确定流: setDecorationSeed 覆盖初始种子 [WorldgenRandom L47 实证]
-                WorldgenRandom wr = new WorldgenRandom(new LegacyRandomSource(0L)); // 构造态即弃 (setDecorationSeed 首行 setSeed 全量重置); 0L 与 vanilla makeRandom 同姿态, 确定性无歧义
+                WorldgenRandom wr = new WorldgenRandom(new XoroshiroRandomSource(RandomSupport.generateUniqueSeed())); // [决策③勘误] 构造态即弃 (setDecorationSeed 首行 setSeed 重置状态), 但算法族须与 vanilla 同为 Xoroshiro: setSeed 只重置状态不换算法, Legacy(48位LCG) 后续 nextInt 流与之完全不同 → piece jitter 错位; 构造姿态照抄 vanilla [ChunkGenerator L278]
                 long dec = wr.setDecorationSeed(seed, cx << 4, cz << 4);
                 wr.setFeatureSeed(dec, 0, chosen.step().ordinal()); // l=0: 同 chunk 同 step 双结构折损已登记
                 BoundingBox writable = new BoundingBox(cp.getMinBlockX(), ctx.level().getMinBuildHeight(),

@@ -538,3 +538,51 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 部署: jar 80877B, MD5 对账过; 旧 80876B 备份 .jar.bak-20261123 (删否归 max)。新旧净差 1B = reobf 压缩巧合, 部署 hash 已对。
 - 终验 (max 实测通过): /tp -1488 80 2620 (V6 五发位) DH 幽灵矿井走廊消失, 频率门计算与 vanilla 实际生成对齐, E 批闭环 [长期记忆: 164]。
 - 遗留 (非阻塞): ① TdStructureAssembleCore.java 编译 deprecation 注记 (既有代码, 非本案引入, 未排查); ② .agent/ 三文件 git 常脏 (框架状态, 11-17 max 已定夺入库不 ignore, 本案未提交它们)。
+
+## 2026-11-23 · F批·L4 地物装饰 (applyBiomeDecoration feature 步复刻)
+
+- 动机: 远景 LOD 缺植被/雪 — vanilla 装饰流的 LOD 侧空缺。设计稿 docs/batch-l4-design.md (§1 源码全实证; §4 折损表 9 项显式声明)。
+- 新增三件: TdBiomeDecorator (feature 循环复刻: setDecorationSeed 逐 chunk 确定流 / biome 集 quart 直采 / FeatureSorter 步表同源重建 / feature 级事务回滚+黑名单); TdDecorateLevelView (装饰态包装: 写入优先+空读回退近似背景两态 [y<envH 草 / y>=envH 空气, envH=MOTION_BLOCKING 与雪锚共缓存], writableBox 溢出护栏, 高度双键缓存); TdSilentLevel 增面 (本地 BiomeManager = NoiseBiomeSource 自持, obfuscateSeed 同 WGR 构造 — [长期记忆: 166] 药方落实, biome 查询全程车道线程私有, 拆 L3 透传真身的主线程 join round trip)。
+- 决策五项落点: ①步集 A ([features].decoration_steps 默认 vegetal_decoration + top_layer_modification) ②帽段守卫 (花草掷点 colChain==null, L4 段列禁 L1 帽段) ③L3 随机源勘误随批修 (placeInChunk 构造 XoroshiroRandomSource, ChunkGenerator L278 同式, AssembleCore L153) ④TdVegetationMap 待 TEST 后退役 ⑤门 dl0 (decoration_max_detail_level 默认 0)。
+- 构建波折: 首编译 5 错 = 2 真符号 (EntityTypeTest / LevelData 包路径) + 3 级联; 修法 = 地面真值 (同接口面 TdSilentLevel 的 import 照抄 + moj 源文件自身 import 行), 14s 绿。
+- 部署: jar 93016B 覆盖拷入 TEST mods (11-23 12:21); .bak-20261123 (80876B) = D 批 jar 仍为 mods 内回滚锚; E 批 80877B 无 mods 备份 (git d016b21 可重建)。
+- 待实测 (TEST): ①删 saves\<世界>\data\DistantHorizons.sqlite (+wal/shm) 或开新世界 — 缓存不删装饰不跑; ②视觉 dl0: 远景树剪影 + 开阔地雪盖; 沙漠无仙人掌 / 水面无冰无水草 = 预期折损 (#8/#4/#9); ③日志: [decorate] chunks[..] feature 尝试 N 次 / [decorate] feature 异常 (warn 黑名单) / [assemble] region 列段数较 C 批回升; ④全过后收口: TdVegetationMap 退役 (决策④) + commit + 折损终验。
+- 遗留 (非阻塞): ①设计稿 §7 工作量表被 11-23 勘误引用块拦腰截断 (L150-155 插在表格中, Config 行 L156 挤出表体) — 排版事故待修 (replace -l 150-156 勘误块移表后); ②补账说明: F 批施工期间未及时入 GOAL-PLAN, 本轮补记。
+
+## 2026-11-24 · L4 排障案卷 (F 批实测异常四案, 读码全闭环, 未动代码)
+
+- 动机: F 批部署后 max 实测回报: 湖上浮树浮花 / 方格式错树与空片 / cocoa 刷屏 / 鸡 143 次异常。TD fork + TDH 全链读码定位, 源码级闭环。
+- 案① 浮树浮花 (根因实证): FarLookupHeightMixin (TD fork) — far-lookup 内 getBaseHeight 对含水谓词 (MOTION_BLOCKING/WORLD_SURFACE) 返回 max(湖床, SEA_LEVEL=63) → 水列装饰锚定 = 水面; 高地湖 (水面>63) 例外锚湖床 (花沉水底, 可实测验证)。修复方案: TdDecorateLevelView 背景两态改三态 (OCEAN_FLOOR 以下固体, OF~WS 间水, WS 以上空气; 双 type 高度查询, heightCache type 分桶现成)。红利: 水草海带冰盖背景复活。尾巴: 高地河 waterSurf 两套水面差几格 (far-lookup 不知 waterSurf), 精确对齐需 View 直查 TD 三件套 (权衡待 max)。
+- 案④ 方格 (根因实证, 双层): 装饰在 TDH 车道线程 far-lookup 会话内 → 高度 (mixin) 与 biome (TDBS getNoiseBiome → fetchHeightmap) 双源: 热 tile (hydrology 驻留) = resident 真值; 冷 tile = approximateHeightmap 粗图近似 (高度双线性差几米 / biome 512 格硬切一格一 biome)。渲染侧 getRiverTerrainData → INFERENCE_EXECUTOR 线程隔离 (ThreadLocal 天然失效) → buildRiverTerrainData (LTP) → hydrologyProvider.getRegion 生成式真值。错位边界 = 2048 格 hydrology tile 冷热边界 + 冷区内 512 格 biome 硬切 = 双层方格。近似路径不调 noteTerrainInterest → 冷区 tiles 永不驻留 (warmer 不知情) = 稳态方格非过渡态。TD 作者 LTP 注释明文警告 chunk generation must never run inside far-lookup — L3/L4 的 far-lookup 包裹即该预言场景。修复方案 A: AssembleCore 开 far-lookup 前非 far-lookup prefetch fetchHeightmap (region+pad 界) — 冷区走 genHeightmap 阻塞 GPU (车道后台无感), 驻留后全 resident 真值; PENDING FutureTask 去重与渲染侧共享同一 GPU 任务; 红利: warmer 激活 (修永远近似) + L3 结构锚定负担减轻。代价: 装饰先于地形到冷区竞态下树晚 10-30s (无感级)。
+- 案② cocoa 刷屏: vanilla 装饰器自身 bug (树多数完整仅日志刷屏); 佐证: wrapper 失败 0 / placeInChunk 失败 0, 异常簇坐标两片 jungle 区。治理: 同 feature 异常首栈 + 后续计数 (warn 去重)。
+- 案③ 鸡 143 次: entity spawn 走 getLevel() 真身通道 (View 转发), 与浮树同源, P3 后置。
+- 雪盖 (旁支): SnowAndFreezeFeatureMixin (TD fork) 激活条件走 getLevel() 真身链 → LOD 装饰路径同样触发; 树冠雪被树冠非屋顶规则改写; 冷 tile 近似无 snowLayers → 雪深回落 1 层 → 开阔地雪或现逐 tile 深浅差; 树冠无雪归因 = TDH #7 + 此 mixin 双层叠加。
+- max 待答四项 (判别): ①方格走近消失否 ②错树 = 丛林树否 (cocoa 簇 -160..-185, 216..236 与 -167..-186, 134..151 两片可对位) ③开阔地雪盖有无 + 深浅分片 ④湖海拔 (高地湖 → 花在水下)。
+- 修复裁决位 (方案 1 prefetch / 2 三态背景 / 3 warn 去重) 全部待 max 拍板, 拍板前不动代码。证据链: 长期记忆 [168] [169]。
+- 方案 A 插点实证 (AssembleCore.compute): region 界 L73-77 在 beginFarLookup L93 之前, 双空早退 L84 在前 (双空不 prefetch), 插入位 = L93 前; fetchHeightmap 坐标序 i=Z j=X, 端点 exclusive; TDBS 后续 tile 对齐窗口 CACHE key 与 prefetch 的 region 界不同, 但 resident 检查 canonical tiles 驻留即命中 (仅数组组装级开销, 无重新推理). 未验证点: HydrologyProvider tile 级并发去重未直读 (两线程同时冷启动同一 tile 最坏各算一遍, 不损正确性仅浪费 GPU), 实施前补读 getRegion.
+- max 判别回执 (2026-11-24): ① 方格进入 vanilla 渲染距离才消失 (渲染权顶替, 非数据修复), LOD 区间内稳态不消失 → 冷 tile 从不驻留实证强化, 方案 1 必要性升为实证级; ② 错树非丛林树 → cocoa 簇 (jungle 区, 近似正常分支) 与错树解耦两现象, 错树形态待澄清 (PLAINS fallback 平原树 vs 高度错位, 均归案④近似双源, 方案 1 统一修); ③ LOD 雪盖未观察 (旁支, 下次顺手看); ④ 湖面不高 (≈63) → 案①浮树浮花根因吻合 (锚=水面)。
+
+## 2026-11-24 · L4 排障施工 (三方案落地, commit 待打)
+
+改动四文件 (构建绿 28s, 已部署 TEST):
+
+1. **TdConfig**: +decoration_prefetch / +decoration_water_background (默认 true, 独立回滚开关).
+2. **TdStructureAssembleCore**: beginFarLookup 前插 prefetchDecorationHeightmap (far-lookup 会话外; 窗 = region ± DECORATION_PAD_CHUNKS; 双空早退在其前 — 双空不 prefetch), decorData 透传 decorateRegion.
+3. **TdBiomeDecorator**: decorateRegion +waterData 参; 新增 prefetchDecorationHeightmap (配置门 → fetchHeightmap(z0,x0,z1e,x1e) catch → null); feature 异常 warn 去重 (签名 = 异常类@步:全局索引, 首条全栈 + region 末汇总, 磁盘冲刷根除).
+4. **TdDecorateLevelView**: 背景三态 — 窗内列 bedTop = convert(heightmap)-1; 水顶 = fluvial 有效 (判据逐条同 RiverDecorator L42-44: strength≥8 && surface≠NO_FLUVIAL && surface≥床) → convert(surface)-1, 无效且床顶在海面下 → 海平面-1 (ScaledAltitude.SEA_LEVEL, HeightConverter.SEA_LEVEL 是 private 够不着); y≤bedTop 草 / y≤水顶水 / else 空气; 窗外·无数据·配置关 = 旧两态回退.
+
+**测试观察点 (max 实跑)**:
+- 案①湖上浮树浮花: 水背景生效 → 树苗 would_survive 被水拒 → 消失 (看日志背景模式 = "三态(水)").
+- 案④方格错树: prefetch 驻留 → 装饰期高度全 resident 真值 → 方格消失 (判据: LOD 区间内稳态消失, 非渲染权顶替).
+- 方案3: cocoa 刷屏 → 首条全栈 + "region[...] feature 异常汇总: N 次 / M 签名 {...}".
+- 观察: prefetch 失败 warn (getRegionIfResident flag 匹配未实证, 风险挂单).
+- 旁支顺手看: LOD 雪盖有无 + 深浅分片; 错树形态 (PLAINS fallback?).
+
+
+## 2026-11-25 · L4 收口 (F 批 + 排障修复, 验收全绿, commit 打包)
+
+- 验收 (清 DH 库从零实跑, 107,075 行日志真生成): UOE 85,670→0 / IOOBE 148→0 / 三态(水) 18,195 行零回退 / 湖中树·树叠树·结构顶长树消失 / 冷区雪盖 + 水岸冰恢复 / max 肉眼复核通过.
+- 缓存诊断: F 批部署后"还是原样" = 329MB 旧 DH 库回放坏 LOD (16 世界库仅 (15) 活跃); 锚名 .bak-20261125 隔离, 新库从零长 458MB.
+- 注记: 方格 (案④) max 未单独回报, prefetch 已落地, 下次留意; pale_garden biome WARN ×1 = DH 自身噪声 (1.20.1 无此 biome).
+- commit: 车道 + 排障修复打包一 commit (中途未打过 F 批中间态, 按文件拆会把修复混入, 历史失真), version 0.1.0 → 0.1.1 (0.1.0 已以坏行为版本存在过).
+- 遗留: ①TdVegetationMap 退役 (决策④) ②设计稿 §7 排版事故 (勘误块拦腰截表) ③锚清理待 max: mods 0.1.0.jar.bak-20261125 + .bak-20261123 + (15)库 .bak-20261125 (329MB) + D:\temp\dh-sqlite-bak-20261124.

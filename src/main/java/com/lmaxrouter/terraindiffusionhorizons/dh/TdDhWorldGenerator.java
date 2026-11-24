@@ -297,7 +297,7 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                 // + 非换色列 (C批·B案: 贴地结构列不掷花草 — 路/农田无花, 且帽段会与结构段争列顶);
                 // 花优先于草, 草池受 grassColoring gate (草色≈草方块色, 留口默认不发, TdFlowerMap 类注 6)
                 IDhApiBlockStateWrapper topBlock = null;
-                if (cfg0.vegetationColoring && !waterCol && scol == null && solidTop > dataBottom && style.flower != null) {
+                if (cfg0.vegetationColoring && !waterCol && scol == null && colChain == null && solidTop > dataBottom && style.flower != null) { // [决策②] colChain==null: L4 载荷列禁 L1 花草帽段 (段列唯一生产者, 防段重叠)
                     int gx = b[1] + x; // 世界块坐标 (与 [C] 河床分档散列同源)
                     int gz = b[0] + z;
                     // 列哈希: 结构 (XOR 流) 与尾盐均区别于树格, 避免花斑与树格系统性同位

@@ -25,6 +25,7 @@ import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.UpgradeData;
+import net.minecraft.world.level.LightLayer; // [L4·修复2] getBrightness 覆写 [javap 实证: level 包, 非 lighting 子包]
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
@@ -33,7 +34,10 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.ticks.LevelTickAccess;
 import net.minecraft.world.ticks.ScheduledTick;
 
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +51,7 @@ import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.flag.FeatureFlagSet;
 
 /**
- * 哑世界 (L3; 设计稿 docs/batch-c-design.md §2.5).
+ * 哑世界 (L3/L4; 设计稿 docs/batch-c-design.md §2.5 + batch-l4-design.md).
  *
  * <p>结构组装的方块收集器: piece.postProcess 在本对象上写方块, 落进懒建的
  * ProtoChunk (五参便捷构造, mojmap L50 实证) — 纯内存后端, 真世界零副作用.
@@ -63,18 +67,27 @@ import net.minecraft.world.flag.FeatureFlagSet;
  * 直接 setBlockState 会 NPE — setBlock 前按需补建 LevelChunkSection
  * (读路径遇 null 段按空气处理, 不产生分配).</p>
  */
-public final class TdSilentLevel implements WorldGenLevel {
+public final class TdSilentLevel implements WorldGenLevel, BiomeManager.NoiseBiomeSource { // [L4] NoiseBiomeSource: 本地 manager 的采样源 (getNoiseBiome 签名同 LevelReader 面, 一法两 implements)
 
     private final TdStructureContext.Snapshot ctx;
     private final BiomeSource biomeSource;
     /** 组装期 chunk 池: bbox 逐 chunk placeInChunk 时懒建, 生命周期 = 单次 region 组装. */
     private final Map<ChunkPos, ProtoChunk> chunks = new LinkedHashMap<>();
+    /** [L4·修复3] 写入响应列顶: type -> chunkKey -> 列首自由格 int[256] (哨兵 MIN_VALUE).
+     *  bumpWrittenTops 抬升 / View.getHeight 取 max 消费; 生命周期 = 单次 region 组装
+     *  (每 pass 独立 level, 跨 pass 零污染 — pad 交叠带的树由各自 pass 独立放置/clip). */
+    private final EnumMap<Heightmap.Types, Map<Long, int[]>> writtenTops = new EnumMap<>(Heightmap.Types.class);
+    /** [L4·修复3] Types 全集快照: values() 每次调用 clone 数组, bump 热路径 (~40 万次/region) 缓存一次. */
+    private static final Heightmap.Types[] HEIGHTMAP_TYPES = Heightmap.Types.values();
     /** getRandom 兜底 (piece 级随机全部显式传参, 此实例仅满足接口面). */
     private final RandomSource random = RandomSource.create();
+    /** [biome链v3] 本地 biome manager: 构造同 WGR 式 (obfuscateSeed(worldSeed)), 采样源 = 本类 getNoiseBiome. */
+    private final BiomeManager localBiomeManager;
 
     TdSilentLevel(TdStructureContext.Snapshot ctx) {
         this.ctx = ctx;
         this.biomeSource = ctx.generator().getBiomeSource();
+        this.localBiomeManager = new BiomeManager(this, BiomeManager.obfuscateSeed(ctx.level().getSeed())); // [biome链v3] 本地 manager (WGR 同式构造); this 即 NoiseBiomeSource (本类 implements, getNoiseBiome 一法两用)
     }
 
     /** 折叠源: 本组装写过的全部 chunk (TdStructureAssembleCore 列折叠消费). */
@@ -115,12 +128,54 @@ public final class TdSilentLevel implements WorldGenLevel {
             return false; // 界外防御 (piece 受 box 限制理论不达)
         }
         ensureSection(chunk, y);
-        return chunk.setBlockState(pos, state, false) != null;
+        boolean written = chunk.setBlockState(pos, state, false) != null;
+        if (written) {
+            bumpWrittenTops(pos, state, y); // [L4·修复3] 写入响应列顶 (View.getHeight 消费)
+        }
+        return written;
     }
 
     @Override
     public boolean setBlock(BlockPos pos, BlockState state, int flags) {
         return setBlock(pos, state, flags, 512);
+    }
+    /**
+     * [L4·修复3] 写入响应列顶: setBlock 成功后按各 Types 谓词抬列首自由格 (只升不降,
+     * 组装/装饰期无删除语义). View.getHeight 取 max(TD 地形, writtenTop) — 后树基
+     * 抬到先序树干/结构顶上 = vanilla live heightmap 叠放语义 (修 IOOBE/树叠树/结构顶长树).
+     * air / structure_void 早退: air 对全部谓词 false 本就无命中; void 落盘与否未实证
+     * 且 vanilla 从不进世界, 误抬会把树顶到 void 柱上.
+     */
+    private void bumpWrittenTops(BlockPos pos, BlockState state, int y) {
+        if (state.isAir() || state.getBlock() == Blocks.STRUCTURE_VOID) {
+            return;
+        }
+        long chunkKey = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
+        int ci = (pos.getX() & 15) * 16 + (pos.getZ() & 15);
+        int firstFree = y + 1; // 列顶 = 最高命中方块 + 1 (首自由格, vanilla Heightmap 语义)
+        for (Heightmap.Types t : HEIGHTMAP_TYPES) {
+            if (t.isOpaque().test(state)) {
+                int[] col = writtenTops.computeIfAbsent(t, k -> new HashMap<>())
+                        .computeIfAbsent(chunkKey, k -> {
+                            int[] a = new int[256];
+                            Arrays.fill(a, Integer.MIN_VALUE); // 哨兵: 未写列
+                            return a;
+                        });
+                if (firstFree > col[ci]) {
+                    col[ci] = firstFree; // 只升不降
+                }
+            }
+        }
+    }
+
+    /** [L4·修复3] 列写入顶查询 (View.getHeight 消费): 该 (type, 列) 已写方块产生的首自由格; 未写 = MIN_VALUE. */
+    int writtenTop(Heightmap.Types type, int x, int z) {
+        Map<Long, int[]> byChunk = writtenTops.get(type);
+        if (byChunk == null) {
+            return Integer.MIN_VALUE;
+        }
+        int[] col = byChunk.get(ChunkPos.asLong(x >> 4, z >> 4));
+        return col == null ? Integer.MIN_VALUE : col[(x & 15) * 16 + (z & 15)];
     }
 
     // ==== chunk 后端 (LevelReader) ====
@@ -177,7 +232,8 @@ public final class TdSilentLevel implements WorldGenLevel {
 
     @Override
     public BiomeManager getBiomeManager() {
-        return ctx.level().getBiomeManager(); // 真身只读 (噪声扰动采样, 结构放置同源)
+        return localBiomeManager; // [biome链v3] 本地 manager: 值等价 WGR parity 基准 (8角整数quart + 本类 TDBS 直采);
+        // 路径修复: 原透传真身 → off-thread 走 ServerChunkCache.getChunk 主线程 join() 同步阻塞 (L3 债, 随 L4 批闭)
     }
 
     // ==== 世界元数据 (LevelReader / LevelAccessor / WorldGenLevel) ====
@@ -302,6 +358,17 @@ public final class TdSilentLevel implements WorldGenLevel {
         // getLightEngine 保持 UOE 绊线 (其他光照调用者触发即打名, crash 驱动不污染)
         return Math.max(0, 15 - amount);
     }
+    /**
+     * [L4·修复2] 分层光值 (世界生成期语义): SKY = 15 (满昼光), BLOCK = 0 (proto 世界无方块光源).
+     * 消费者实证 (85,670 次 UOE): SnowAndFreeze -> shouldSnow/shouldFreeze 前置
+     * getBrightness(BLOCK, pos) < 10, 0 < 10 放行冷区雪/冰判定 (此前 UOE 击杀整个 feature).
+     * 与 getRawBrightness = max(0, 15-amount) / getSkyDarken() = 0 / getShade() = 1.0f
+     * 同族 "剪影无光照"; getLightEngine 保持 UOE 绊线 (未实证调用者继续 crash 驱动).
+     */
+    @Override
+    public int getBrightness(LightLayer layer, BlockPos pos) {
+        return layer == LightLayer.SKY ? 15 : 0;
+    }
 
     // ==== no-op 桩 (事件/粒子: 结构生成必不触; 触了也无损 — 不给 crash 信号) ====
 
@@ -409,9 +476,14 @@ public final class TdSilentLevel implements WorldGenLevel {
         return chunks.computeIfAbsent(new ChunkPos(cx, cz),
                 p -> new ProtoChunk(p, UpgradeData.EMPTY, ctx.level(), ctx.biomeRegistry(), null));
     }
+    /** [L4] 只读 peek (不懒建): 装饰 View 的写入优先判定用 (null = 该 chunk 未写过).
+     *  热路径分配 ChunkPos 短命对象, TLAB 吸收; TEST 若见热点再换长键 map. */
+    ProtoChunk peekChunk(int cx, int cz) {
+        return chunks.get(new ChunkPos(cx, cz));
+    }
 
     /** 段读: null 段 = 未写过 = 空气 (不补建, 读路径零分配). */
-    private LevelChunkSection sectionOf(ProtoChunk chunk, int y) {
+    LevelChunkSection sectionOf(ProtoChunk chunk, int y) { // [L4] 包私有: 装饰 View 复用 (写入优先判定的段定位)
         if (y < getMinBuildHeight() || y >= getMaxBuildHeight()) {
             return null;
         }

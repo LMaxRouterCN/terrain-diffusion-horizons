@@ -1,5 +1,6 @@
 package com.lmaxrouter.terraindiffusionhorizons.dh.structure;
 
+import com.lmaxrouter.terraindiffusionhorizons.TdConfig;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
@@ -7,6 +8,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeSource;
+import net.minecraft.world.level.biome.FeatureSorter;
+import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
@@ -14,8 +18,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -42,6 +48,7 @@ public final class TdStructureContext {
      * 一次装配的原子快照 (volatile 读一致性: 车道线程要么拿全套要么拿 null).
      * level 即 generate 第十参 LevelHeightAccessor (Structure.java L82 签名实证,
      * ServerLevel 实现 LevelHeightAccessor).
+     * [L4] decorationSteps / featureSteps = 装饰车道上下文 (装配期构建, 独立 try 失败只杀装饰).
      */
     public record Snapshot(
             ServerLevel level,
@@ -50,7 +57,11 @@ public final class TdStructureContext {
             StructureTemplateManager templateManager,
             RegistryAccess registryAccess,
             Registry<Biome> biomeRegistry,
-            Map<String, List<ResolvedEntry>> entriesTable) {
+            Map<String, List<ResolvedEntry>> entriesTable,
+            /** [L4] 装饰步集 (GenerationStep.Decoration ordinal 升序; 空 = 装饰 no-op). */
+            int[] decorationSteps,
+            /** [L4] 步表 (FeatureSorter.buildFeaturesPerStep 与 vanilla featuresPerStep memoize 同源; 空 = 装饰 no-op). */
+            List<FeatureSorter.StepFeatureData> featureSteps) {
     }
 
     private static volatile Snapshot active;
@@ -93,8 +104,43 @@ public final class TdStructureContext {
                     LOG.warn("集合 {} 全部 entry miss, 组装侧跳过", e.getKey());
                 }
             }
+            // ==== [L4] 装饰上下文装配 (独立 try: 失败只杀装饰, 结构装配照常) ====
+            // 步表与 vanilla ChunkGenerator 构造 L93 memoize 逐参同源:
+            // FeatureSorter.buildFeaturesPerStep(List.copyOf(possibleBiomes()), holder -> settingsGetter.apply(holder).features(), true);
+            // getBiomeGenerationSettings(Holder) = generationSettingsGetter 直通 (deprecated 公开面, ChunkGenerator L561 实证).
+            int[] decorationSteps = new int[0];
+            List<FeatureSorter.StepFeatureData> featureSteps = List.of();
+            try {
+                // 步集解析: config 名字表 -> Decoration 枚举; EnumSet 迭代天然 ordinal 升序
+                EnumSet<GenerationStep.Decoration> stepSet = EnumSet.noneOf(GenerationStep.Decoration.class);
+                for (String name : TdConfig.get().decorationSteps) {
+                    try {
+                        stepSet.add(GenerationStep.Decoration.valueOf(name.trim().toUpperCase(Locale.ROOT)));
+                    } catch (IllegalArgumentException unknown) {
+                        LOG.warn("装饰步名解析 miss, 跳过: {}", name);
+                    }
+                }
+                if (!stepSet.isEmpty()) { // 步集空 = 装饰 no-op, 步表跳过构建 (省装配耗时)
+                    BiomeSource decoratorBiomeSource = generator.getBiomeSource();
+                    List<FeatureSorter.StepFeatureData> built = FeatureSorter.buildFeaturesPerStep(
+                            List.copyOf(decoratorBiomeSource.possibleBiomes()),
+                            holder -> generator.getBiomeGenerationSettings(holder).features(),
+                            true);
+                    int[] steps = new int[stepSet.size()];
+                    int di = 0;
+                    for (GenerationStep.Decoration d : stepSet) {
+                        steps[di++] = d.ordinal();
+                    }
+                    decorationSteps = steps;   // 原子提交: 构建全成功才落地
+                    featureSteps = built;
+                }
+            } catch (Exception dex) {
+                LOG.warn("L4 装饰上下文装配失败, 本世界装饰 no-op: {}", dex.toString());
+                decorationSteps = new int[0];
+                featureSteps = List.of();
+            }
             active = new Snapshot(level, generator, randomState, templateManager,
-                    registryAccess, biomeRegistry, table);
+                    registryAccess, biomeRegistry, table, decorationSteps, featureSteps);
             LOG.info("结构组装上下文已装配: {} 集合 / {} entry", table.size(), resolved);
         } catch (Exception ex) {
             active = null;
