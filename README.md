@@ -26,21 +26,21 @@ TD 世界缩放 6：稳态约 700 chunks/s，峰值约 1500 chunks/s。
 
 ## 已知限制 / Known Limitations
 
-- **结构与地物是同源近似，非逐块复刻**：结构/装饰车道在哑世界里以同 seed 跑 vanilla 真生成器，结果折叠成列段（默认上限 6 段/列，`column_segments`）；装饰只跑 dl0。已知折损（设计稿 §4 折损表 9 项）：沙漠缺仙人掌/枯灌木、红树林缺红树、水面缺水生植物、树冠无雪盖等。
-- **河岸散布沙/砾与原版有偏差**：这些块属于原版表面规则的噪声分支和 feature 层产物，发生在跨群系边界的碎片尺度上，LOD 采样天然拿不到
-- **LOD 阶梯感**：64 块降采样的固有几何模糊，无解。
-- **河谷色带**：远处沿河可见一条色调略异的窄带。河流在数据上是独立群系，草色按群系取色（grass tint），河流群系与两岸群系的草色有细微差异；原版近距离渲染会在群系边界对颜色做渐变过渡，而 LOD 每列数据只携带一个群系、没有这种过渡，色差就以带状暴露出来。
+- **远景结构与植被是近似还原，不是逐块复刻**：位置和内容由同种子下的原版生成规则决定，但每列只保留少数几层方块（默认上限 6 层，`column_segments`）。已知缺失：沙漠没有仙人掌和枯灌木、没有红树林、水面没有植物、树顶不积雪等。
+- **河岸的沙/砾分布与原版有偏差**：这些是原版在群系交界处的细碎点缀，尺度太小，远景采样拿不到
+- **远景呈台阶状**：越远的一格代表的地越宽，远处几何呈台阶状，是 LOD 的固有特性，无法避免
+- **河谷色带**：远处沿河可见一条色调略异的窄带。河流在数据里是独立群系，草色与两岸略有差异；近距离原版会在群系边界做颜色渐变，远景每格只带一个群系的颜色、没有渐变，差异就以带状露出来
 
 ## 特性 / Features
 
 - AI 地形模型直接出 LOD，跳过真实 chunk 生成
-- 群系驱动表面方块：65 群系剪枝表，数据与 chunk 生成同源
-- 水体双通道：河流（水强度 + 液面）与海洋（海床 → 海平面水段），冻河/冻洋冰盖
-- 河床材质按水强度分档（沙/砾/黏土），确定性空间散列
-- 结构 LOD 车道：与 vanilla 同 seed 的撒点 + 组装折叠成列段（村庄、神殿、矿井等）
-- 地物装饰车道：vanilla 群系装饰在 dl0 复刻（树、花草、雪盖）
-- 群系 wrapper 进 data point，DH 远距渲染正确色调
-- 纯桥接层：无 mixin、无 AT、无反射
+- 群系驱动表面方块：草/沙/雪等地表与原版一致
+- 水体：河流有自己的水面高度，海洋填到海平面；冻河/冻洋有冰盖
+- 河床材质按水流强度分布（沙/砾/黏土），同一位置材质固定
+- 远景结构：与原版同位置生成（村庄、神殿、矿井等），细节简化
+- 远景植被：树、花草、雪盖，与原版同位置
+- 正确的群系颜色：远景的草色/水色与近处一致
+- 纯桥接层：无 mixin、无 Access Transformer、无反射
 
 ## 依赖与版本 / Dependencies
 
@@ -49,7 +49,7 @@ TD 世界缩放 6：稳态约 700 chunks/s，峰值约 1500 chunks/s。
 | Minecraft | 1.20.1 |
 | Forge | 47.2.30 |
 | Distant Horizons | 3.3.3 |
-| Terrain Diffusion | 1.20.1（依赖其公开查询 API `LocalTerrainProvider`） |
+| Terrain Diffusion | 1.20.1 |
 
 TDH 针对 DH 3.3.3 开发并实测通过。其余版本未测试。
 
@@ -57,33 +57,33 @@ TDH 针对 DH 3.3.3 开发并实测通过。其余版本未测试。
 
 1. Forge 47.2.30 (1.20.1)
 2. `mods/` 放入三个 jar：Distant Horizons、Terrain Diffusion、TDH
-3. 按 Terrain Diffusion 的方式创建世界；进世界后 TDH 通过 DH 的 LevelLoad 事件自动注册生成器（日志可见 `TDH 生成器注册完成`），非 TD 世界自动让行给 DH 原生生成链
+3. 按 Terrain Diffusion 的方式创建世界；进世界后 TDH 自动接管远景生成（日志可见 `TDH 生成器注册完成`），非 TD 世界自动退回 DH 原生生成
 4. 确认 DH 的 Distant Generation 已开启
 
 ## 配置 / Configuration
 
-配置文件：`config/terrain-diffusion-mc/terrain-diffusion-horizons.toml`（首次运行播种带注释的默认模板；旧版 JSON 检出时日志提示手动迁移）。
+配置文件：`config/terrain-diffusion-mc/terrain-diffusion-horizons.toml`（首次运行自动生成，带注释说明）
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `general.enabled` | `true` | 总开关，false 时不注册生成器，走 DH 原生路径 |
-| `terrain.surfaceBlock` | `minecraft:stone` | fallback 表面方块（纯几何模式或群系解析失败时） |
-| `terrain.fillerBiome` | `minecraft:plains` | fallback 群系（data point 携带） |
-| `terrain.useBiomeSurface` | `true` | 群系驱动表面；false 退纯几何模式 |
-| `terrain.surfaceBlockOverrides` | `{}` | 群系 key → 方块 ID 稀疏覆盖，只覆地表字段 |
-| `vegetation.coloring` | `true` | L1 花草色斑：干列列顶按群系花池密度概率换花色（只取色，列高不变） |
-| `vegetation.grassColoring` | `false` | 草丛色斑留口（默认关：草丛与草方块共用 grass colormap） |
-| `structure.enabled` | `true` | 结构 LOD 车道总开关（同源撒点 + L3 组装） |
-| `structure.async` | `true` | 异步：地形 LOD 先出图，结构算完自动刷新补全 |
-| `structure.pad_chunks` | `16` | 扫描外扩（chunk），bbox 跨 region 的结构防截断 |
-| `structure.column_segments` | `6` | 列折叠段数上限；`1` = 旧单段行为（配置级回滚开关） |
-| `structure.surface_blend_depth` | `3` | 贴地换色深度；负数关闭（悬空结构不受影响） |
-| `features.enabled` | `true` | 地物 LOD 车道总开关（L1 花草走同步快路径不受此段影响） |
-| `features.async` | `true` | 语义同 `structure.async` |
-| `features.decoration_steps` | `["vegetal_decoration", "top_layer_modification"]` | 装饰步集：参与的生成步（`GenerationStep.Decoration` 枚举名，大小写不敏感）；空数组 = 关闭装饰 |
-| `features.decoration_max_detail_level` | `0` | 装饰门控：detailLevel 高于此值的 region 不跑装饰（`0` = 只 dl0） |
-| `features.decoration_prefetch` | `true` | 装饰窗 heightmap 预取驻留（修冷区方格/错树）；`false` 回退旧近似路径 |
-| `features.decoration_water_background` | `true` | 装饰三态水背景（修湖上浮树浮花）；`false` 回退旧两态；依赖 prefetch |
+| `general.enabled` | `true` | 总开关，false = 关闭 TDH，DH 自己生成远景 |
+| `terrain.surfaceBlock` | `minecraft:stone` | 兜底表面方块（群系表面关闭或解析失败时使用） |
+| `terrain.fillerBiome` | `minecraft:plains` | 兜底群系（群系表面关闭时使用，影响远景草色） |
+| `terrain.useBiomeSurface` | `true` | 表面方块按群系（与原版一致）；false = 关闭（省内存，全用兜底方块） |
+| `terrain.surfaceBlockOverrides` | `{}` | 按群系指定地表方块（没指定的群系用默认） |
+| `vegetation.coloring` | `true` | 花草色斑：远景草地上按该群系花的密度点缀花色（只换颜色，高度不变） |
+| `vegetation.grassColoring` | `false` | 草丛色斑（默认关：远景里草丛与草方块本就同色，一般无需开） |
+| `structure.enabled` | `true` | 远景结构总开关 |
+| `structure.async` | `true` | 异步：先出地形，结构算完自动补上；false = 等结构算完一起显示（无刷新闪烁） |
+| `structure.pad_chunks` | `16` | 扫描外扩（区块数）：防止横跨边界的大型结构被截断 |
+| `structure.column_segments` | `6` | 结构每列的方块层数上限；1 = 旧行为（单层）；层数多还原度高、渲染开销大 |
+| `structure.surface_blend_depth` | `3` | 埋地结构表面染色深度（路/农田等）；负数 = 关闭 |
+| `features.enabled` | `true` | 远景植被总开关（上面的花草色斑是独立开关，不受此项影响） |
+| `features.async` | `true` | 同 structure.async |
+| `features.decoration_steps` | `["vegetal_decoration", "top_layer_modification"]` | 参与远景植被的生成步（合法值见配置文件注释，大小写不敏感）；空数组 = 关闭植被 |
+| `features.decoration_max_detail_level` | `0` | 档位上限：更远的档位不跑植被（0 = 默认，只最近档位跑） |
+| `features.decoration_prefetch` | `true` | 高度修正：修远景植被的方格状错位和错位的树；false = 关闭修正 |
+| `features.decoration_water_background` | `true` | 水面判定：修湖上浮树浮花；依赖上一项（高度修正） |
 
 ```toml
 [general]
@@ -119,7 +119,7 @@ decoration_water_background = true
 ```
 
 内存注意：`useBiomeSurface=true` 约 520MB，false 约 150MB（实测）。
-升级新版本后新增键不显示在文件里时，删除 toml 让其重播种即可。
+升级新版本后新增键不显示在文件里时，删除 toml 让它重新生成即可。
 配置改动需重进世界生效。
 
 ## 实现原理 / How It Works
@@ -219,20 +219,20 @@ When a world is freshly created, DH needs a warm-up: a large batch of chunks is 
 
 ## Known Limitations
 
-- **Structures and features are same-source approximations, not block-exact replicas**: the structure and decoration lanes run vanilla's real generators with the same seed inside a silent world, then fold the output into column segments (default cap 6 per column, `column_segments`); decoration runs at dl0 only. Known losses (design doc §4, a 9-item table): cactus and dead bushes missing in deserts, mangroves missing, no aquatic plants, no snow on tree canopies, among others.
-- **Riverbank sand/gravel scatter differs from vanilla**: these blocks come from noise branches of the vanilla surface rules and the feature layer, at fragment scale across biome boundaries—out of reach for LOD sampling.
-- **LOD staircase**: inherent geometric blur from 64-block downsampling. No fix.
-- **River valley tint band**: a narrow strip of slightly off tint along rivers, visible at distance. Rivers are a distinct biome in the data, and grass tint is taken per biome; river biomes differ slightly from their banks. Vanilla near rendering blends colors across biome boundaries, while each LOD column carries exactly one biome with no blending, so the difference shows up as a band.
+- **Distant structures and vegetation are approximations, not block-exact replicas**: positions and content follow vanilla's generation rules under the same seed, but each column keeps only a few block layers (default cap 6, `column_segments`). Known gaps: no cactus or dead bushes in deserts, no mangrove trees, no aquatic plants, no snow on tree canopies, among others.
+- **Riverbank sand/gravel scatter differs from vanilla**: these are vanilla's fine trimmings at biome borders, at a scale too small for distant sampling to pick up
+- **LOD staircase**: at distance one cell covers a wider patch of terrain, so far geometry looks stepped. Inherent to LOD, no fix
+- **River valley tint band**: a narrow strip of slightly off tint along rivers, visible at distance. Rivers are a distinct biome in the data, with grass color slightly different from the banks; vanilla blends colors across biome borders up close, while each distant cell carries a single biome color with no blending, so the difference shows as a band
 
 ## Features
 
 - LODs straight from the AI terrain model, skipping real chunk generation
-- Biome-driven surface blocks: a 65-biome pruned table, sharing its data source with chunk generation
-- Dual-channel water: rivers (water intensity + surface level) and oceans (seabed to sea level), ice caps on frozen rivers/oceans
-- Riverbed material tiered by water intensity (sand/gravel/clay), deterministic spatial hashing
-- Structure LOD lane: same-seed placement and assembly folded into column segments (villages, monuments, mineshafts, ...)
-- Decoration LOD lane: vanilla biome decoration replayed at dl0 (trees, flowers, snow cover)
-- Biome wrappers carried in data points, correct tint at DH render distance
+- Biome-driven surface blocks: grass/sand/snow match the biome, as in vanilla
+- Water: rivers with their own surface level, oceans filled to sea level, ice on frozen rivers/oceans
+- Riverbed material by water flow strength (sand/gravel/clay); the same spot always gets the same material
+- Distant structures: same positions as vanilla (villages, monuments, mineshafts, ...), detail simplified
+- Distant vegetation: trees, flowers, snow cover, same positions as vanilla
+- Correct biome colors at distance
 - Pure bridge layer: no mixins, no Access Transformers, no reflection
 
 ## Dependencies
@@ -242,7 +242,7 @@ When a world is freshly created, DH needs a warm-up: a large batch of chunks is 
 | Minecraft | 1.20.1 |
 | Forge | 47.2.30 |
 | Distant Horizons | 3.3.3 |
-| Terrain Diffusion | 1.20.1 (relies on its public query API `LocalTerrainProvider`) |
+| Terrain Diffusion | 1.20.1 |
 
 TDH is developed and tested against DH 3.3.3; other versions are untested.
 
@@ -250,33 +250,33 @@ TDH is developed and tested against DH 3.3.3; other versions are untested.
 
 1. Forge 47.2.30 (1.20.1)
 2. Drop three jars into `mods/`: Distant Horizons, Terrain Diffusion, TDH
-3. Create a world the Terrain Diffusion way; on world load, TDH registers its generator via DH's LevelLoad event (the log line `TDH 生成器注册完成` marks it); non-TD worlds fall back to DH's native generation chain
+3. Create a world the Terrain Diffusion way; on world load TDH takes over distant generation automatically (the log line `TDH 生成器注册完成` marks it); non-TD worlds fall back to DH's native generation
 4. Make sure DH's Distant Generation is enabled
 
 ## Configuration
 
-Config file: `config/terrain-diffusion-mc/terrain-diffusion-horizons.toml` (a commented default template is seeded on first run; if a legacy JSON is detected, the log tells you to migrate manually).
+Config file: `config/terrain-diffusion-mc/terrain-diffusion-horizons.toml` (generated on first run, with comments explaining each key)
 
 | Key | Default | Description |
 |---|---|---|
-| `general.enabled` | `true` | Master switch; false = generator not registered, DH's native path takes over |
-| `terrain.surfaceBlock` | `minecraft:stone` | Fallback surface block (pure-geometry mode, or failed biome resolution) |
-| `terrain.fillerBiome` | `minecraft:plains` | Fallback biome (carried by data points) |
-| `terrain.useBiomeSurface` | `true` | Biome-driven surface; false = pure-geometry mode |
-| `terrain.surfaceBlockOverrides` | `{}` | Sparse biome-key to block-ID overrides, surface field only |
-| `vegetation.coloring` | `true` | L1 flower speckle: dry column tops swap to flower colors by biome flower-pool density (color only, height unchanged) |
-| `vegetation.grassColoring` | `false` | Grass speckle toggle (off by default: grass shares the grass-block colormap) |
-| `structure.enabled` | `true` | Structure LOD lane master switch (same-seed placement + assembly) |
-| `structure.async` | `true` | Async: terrain LOD publishes first, structures refresh in when done |
-| `structure.pad_chunks` | `16` | Scan padding (chunks); protects cross-region structures from clipping |
-| `structure.column_segments` | `6` | Per-column segment cap; `1` = legacy single-segment behavior (rollback switch) |
-| `structure.surface_blend_depth` | `3` | Surface recolor depth; negative disables (floating structures unaffected) |
-| `features.enabled` | `true` | Feature LOD lane master switch (L1 flowers take a separate sync path) |
-| `features.async` | `true` | Same semantics as `structure.async` |
-| `features.decoration_steps` | `["vegetal_decoration", "top_layer_modification"]` | Decoration steps to run (`GenerationStep.Decoration` enum names); empty array disables decoration |
-| `features.decoration_max_detail_level` | `0` | Decoration gate: regions above this detail level skip decoration (`0` = dl0 only) |
-| `features.decoration_prefetch` | `true` | Heightmap prefetch for the decoration window (fixes cold-region grid and misplaced trees); `false` = legacy approximation path |
-| `features.decoration_water_background` | `true` | Three-state water background for decoration (fixes trees and flowers floating on lakes); `false` = legacy two-state; depends on prefetch |
+| `general.enabled` | `true` | Master switch; false = TDH off, DH generates distant terrain on its own |
+| `terrain.surfaceBlock` | `minecraft:stone` | Fallback surface block (used when biome surface is off or resolution fails) |
+| `terrain.fillerBiome` | `minecraft:plains` | Fallback biome (used when biome surface is off; affects distant grass color) |
+| `terrain.useBiomeSurface` | `true` | Biome-driven surface blocks, as in vanilla; false = off (saves memory, the fallback block is used everywhere) |
+| `terrain.surfaceBlockOverrides` | `{}` | Per-biome surface block overrides (unlisted biomes use the default) |
+| `vegetation.coloring` | `true` | Flower speckle: distant grassland gets flower colors at the biome's natural flower density (color only, height unchanged) |
+| `vegetation.grassColoring` | `false` | Grass speckle (off by default: distant tall grass and grass blocks already share one color) |
+| `structure.enabled` | `true` | Distant structures master switch |
+| `structure.async` | `true` | Async: terrain appears first, structures fill in when done; false = wait for structures (no refresh flicker) |
+| `structure.pad_chunks` | `16` | Scan padding (chunks): keeps large structures straddling borders from being clipped |
+| `structure.column_segments` | `6` | Block layers per structure column; 1 = legacy single layer; more layers = more faithful, more render cost |
+| `structure.surface_blend_depth` | `3` | Buried-structure recolor depth (roads, farmland); negative = off |
+| `features.enabled` | `true` | Distant vegetation master switch (flower speckle above has its own switch) |
+| `features.async` | `true` | Same as `structure.async` |
+| `features.decoration_steps` | `["vegetal_decoration", "top_layer_modification"]` | Generation steps to run (valid values in the config file comments, case-insensitive); empty array disables vegetation |
+| `features.decoration_max_detail_level` | `0` | Detail-level cutoff: regions at farther detail levels skip vegetation (0 = default, only the closest level runs it) |
+| `features.decoration_prefetch` | `true` | Height fix: fixes grid-shaped artifacts and misplaced trees at distance; false = off |
+| `features.decoration_water_background` | `true` | Water check: fixes trees and flowers floating on lakes; needs the height fix on |
 
 ```toml
 [general]
@@ -312,7 +312,7 @@ decoration_water_background = true
 ```
 
 Memory note: `useBiomeSurface=true` is about 520MB, false about 150MB (measured).
-If new keys added by an upgrade do not show up in the file, delete the toml to re-seed it.
+If new keys added by an upgrade do not show up in the file, delete the toml and it regenerates.
 Config changes take effect after re-entering the world.
 
 ## How It Works

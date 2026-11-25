@@ -185,71 +185,71 @@ public final class TdConfig {
     private static final String TEMPLATE = """
             # ============================================================
             # Terrain Diffusion Horizons 配置
-            # 修改后重启游戏生效 (生成器注册时读取一次).
+            # 修改后重进世界生效 (每次进世界时读取).
             # ============================================================
 
             [general]
-            # 总开关: false = 不注册 DH 生成器, DH 走原生路径 (需重进世界生效).
+            # 总开关: false = 关闭本模组, DH 自己生成远景 (需重进世界生效).
             enabled = true
 
             [terrain]
-            # 表面方块 fallback (原版 ID): useBiomeSurface = false 或群系解析失败时使用.
+            # 兜底表面方块 (原版 ID): 群系表面关闭或解析失败时使用.
             surfaceBlock = "minecraft:stone"
-            # 填充群系 fallback (原版 ID): 纯几何模式 (useBiomeSurface = false) 下 data point 携带的群系.
+            # 兜底群系 (原版 ID): 群系表面关闭时远景携带的群系 (影响草色).
             fillerBiome = "minecraft:plains"
-            # true = TD 群系驱动表面方块 (与 chunk 生成同源); false = 纯几何占位 (内存 ~150MB).
+            # true = 表面方块按群系 (草/沙/雪, 与原版一致); false = 全用兜底方块 (内存 ~150MB).
             useBiomeSurface = true
 
-            # 群系 key -> 地表方块覆盖 (原版 ID), 仅覆地表字段, 空 = 全用内置表.
+            # 群系 key -> 地表方块覆盖 (原版 ID), 只改地表那一格, 空 = 全用默认.
             # 取消注释并按需增改:
             # [terrain.surfaceBlockOverrides]
             # "minecraft:plains" = "minecraft:snow_block"
 
             [vegetation]
-            # 花草色斑 (L1): 群系花池查表, 列顶 1 格按 vanilla 密度概率换花色, 远景观感.
-            # 属统计近似非同源; L4 地物同源落地后由真实数据替代.
+            # 花草色斑: 远景的草地按该群系花的密度点缀花色 (只换颜色, 不改高度).
+            # 近似效果; 开启下方 [features] 的远景植被后, 有植物的区域由真实植物接管.
             coloring = true
-            # 草丛色斑 (留口): 草丛与草方块同色 (共用群系 grass colormap), 默认关.
-            # 若远景实测发现 DH 采样使草丛色与草方块分家, 开此启用草池.
+            # 草丛色斑: 默认关 — 远景里草丛与草方块本来同色, 无需开.
+            # 若远景发现草丛与草方块颜色分家, 再开此项.
             grassColoring = false
 
             [structure]
-            # 结构 LOD 车道 (vanilla 同源撒点 + 哑世界组装 + 列段折叠, B2/L3/L4).
-            # 总开关: false = 结构车道不计算.
+            # 远景结构 (村庄/神殿/矿井等): 位置与原版一致, 细节简化.
+            # 总开关: false = 不生成远景结构.
             enabled = true
-            # 异步: true = 地形 LOD 先发布, 结构算完自动刷新补全 (不拖慢地形出图);
-            #       false = 同步模式, 地形 LOD 扣住等结构算完才显示 (一次成型, 无刷新闪烁).
+            # 异步: true = 地形先出图, 结构算完自动补上 (不拖慢地形出图);
+            #       false = 同步, 等结构算完一起显示 (一次成型, 无刷新闪烁).
             async = true
-            # 扫描外扩 (chunk): bbox 跨 region 界的结构防截断 (默认 16 = 256 块 >= mansion 尺度).
+            # 扫描外扩 (区块数): 结构可能横跨扫描边界, 外扩防止大型结构被截断 (默认 16 已足够).
             pad_chunks = 16
-            # 列折叠段数上限 (C-light): 结构列按方块变化切多段 (小屋的腿/板/顶, 树的干/叶),
-            # 1 = 旧单段行为 (配置级回滚); 段多越忠实, FPS 代价越高, 实测权衡.
+            # 结构每列的方块层数上限 (如小屋的柱/墙/顶分层):
+            # 1 = 旧行为 (每列一层); 层数多越还原, 渲染开销也越高, 6 为实测平衡值.
             column_segments = 6
-            # 贴地换色深度 (B 案): 埋地结构 (路/农田) 顶面距地表 <= 此值时表面 1 格换结构块色;
-            # 负数 = 关闭. 悬空结构不受影响 (换色只对埋地段生效).
+            # 埋地结构表面染色: 埋在地下的结构 (路/农田) 顶面距地表 <= 此值时,
+            # 地表 1 格换用结构方块的颜色; 负数 = 关闭. 悬空结构不受影响.
             surface_blend_depth = 3
 
             [features]
-            # 地物 LOD 车道 (vanilla 群系装饰复刻, L4; L1 花草色斑是同步快路径, 开关在上方 [vegetation] 段, 不受此段影响).
-            # 总开关: false = 地物车道不计算.
+            # 远景植被 (树/花/雪盖): 位置与原版一致; 花草色斑的开关在上方 [vegetation] 段, 不受此段影响.
+            # 总开关: false = 不生成远景植被.
             enabled = true
-            # 异步: 语义同 [structure].async.
+            # 异步: 同 [structure].async.
             async = true
-            # 装饰步集 (L4): 参与的生成步 (GenerationStep.Decoration 枚举名, 大小写不敏感).
-            # 默认步集 A = 植被 + 顶雪 (树/花/草/蘑菇/雪盖; 矿/湖/泉挖掘类步对 LOD 无益不入).
+            # 参与的生成步 (合法值见下方, 大小写不敏感).
+            # 默认 = 植被 + 顶雪 (树/花/草/蘑菇/雪盖).
             # 合法值: raw_generation, lakes, local_modifications, underground_structures,
             #   surface_structures, strongholds, underground_ores, underground_decoration,
             #   fluid_springs, vegetal_decoration, top_layer_modification
-            # 空数组 = 关闭装饰.
+            # 空数组 = 关闭远景植被.
             decoration_steps = ["vegetal_decoration", "top_layer_modification"]
-            # 装饰门控 (API 级档位): detailLevel > 此值的 region 不跑装饰.
-            # 默认 0 = 只 dl0 (与地形车道同档; 大档列稀, 装饰写不满单块列).
+            # 档位上限: 更远的档位不跑远景植被.
+            # 默认 0 = 只最近的档位 (更远的档位一格对应的地太宽, 放不下单格植物).
             decoration_max_detail_level = 0
-            # 装饰窗 heightmap prefetch (排障方案1): far-lookup 会话外预取装饰窗 heightmap
-            # 并驻留, 装饰期高度查询走 resident 真值 (修方格错树); false = 回退旧近似路径.
+            # 高度修正: 提前查好该处的地面高度, 植物放到真实高度上
+            # (修远景植被的方格状错位和错位的树); false = 关闭, 回到旧算法.
             decoration_prefetch = true
-            # 装饰三态水背景 (排障方案2): 数据窗内背景 = 床下草/水柱/水上空气 (修湖上浮树浮花);
-            # false = 回退旧两态. 依赖 prefetch 数据, prefetch 关闭时此开关无效.
+            # 水面判定: 放植物前先查此处是否有水 (修湖上浮树浮花);
+            # false = 关闭. 依赖高度修正, 该项关闭时本项无效.
             decoration_water_background = true
             """;
 }
