@@ -606,7 +606,7 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
   块 L153-158 在表后 — 旧记录 "拦腰截断" 失实 (疑施工期已顺手修复未记), 无残留动作.
 - README 同步: vegetation.coloring 描述改花草色斑 (旧 "树冠近似" 文案自 11-18 断开起失实
   7 天), 架构表 TdVegetationMap 行删 (双语), 数据流段树冠措辞改并补车道输入.
-- 遗留更新 (2026-11-25 README 修复批): ①②③ 已修 (见下方 README 修复案卷) ④dl1+ 远景无树 = 11-18 起现状, 高 detail 植被归后续路线 ⑤push 本批执行 (a77b033 + README commit 同推). 新增呈 max: ⑥TdConfig 播种模板漏 pad_chunks (播种级缺口, 并下个代码批否).
+- 遗留更新 (2026-11-25 README 修复批): ①②③ 已修 (见下方 README 修复案卷) ④dl1+ 远景无树 = 11-18 起现状, 高 detail 植被归后续路线 ⑤push 本批执行 (a77b033 + README commit 同推). ⑥同日已修 (见下方 pad_chunks 播种补档案卷).
 
 ## 2026-11-25 · README 修复案卷 (全文事实巡检 + push)
 
@@ -614,5 +614,20 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 修复 (README 双语 20 处): EN Dependencies 节换回真依赖表 (配置键表系历批错插未清), Installation 补第 4 步 + 删裸 TOML 残段, Configuration 键表补全 (含 L4 四键) + toml 示例重建; CN toml 示例重建 ([terrain] 三键归位, useBiomeSurface 旧块写进 [features] 段 = 播种级错误) + 键表补 L4 四键; Known Limitations 首条重写 ("无地物与结构" 自 B 批起失实 → 同源近似 + 折损要点); Features 补结构/装饰两弹; How-It-Works 补车道小节; 架构表 6 行类清单 → 23 类按包分组 (双语); dl0 行 "64 块/列" 勘误 (一列 = 1 块, [长期记忆: 123]); 性能节 "段数上限 3" 勘误 (ArrayList(3) = 容量提示).
 - 根因层: 配置三件套 (键表 / toml 示例 / 播种模板) 互为对账单却从未对账 — B1 加键只动键表, C/D 加段只动 CN toml 且改坏 (terrain 键漂出段头), L4 四键从未入档, EN 节序错插无人巡检. 教训: 配置面改动 = 三处同步 + 双语对称, 缺一即烂.
 - 顺修: 退役批的 GOAL-PLAN 尾行替换实际未删旧行 (numstat 25/0 纯增量铁证, 陈旧行残留), 本批删除; 手术函数补 head/tail 边界守卫 (首行/末行操作时 PowerShell 降序区间回卷风险).
-- 呈 max: TdConfig 播种模板漏 pad_chunks (键表/fromToml/README 三处有, 播种不写 — 新用户播种看不见该键, getOrElse 默认 16 兜底; 并下个代码批否).
+- 呈 max: TdConfig 播种模板漏 pad_chunks (键表/fromToml/README 三处有, 播种不写 — 新用户播种看不见该键, getOrElse 默认 16 兜底; max 当场裁定修, 见下一案卷).
 - push: 本 commit 与 a77b033 同推 origin master.
+
+## 2026-11-25 · pad_chunks 播种补档 (模板自述正名)
+
+- TdConfig TEMPLATE [structure] 段补 pad_chunks = 16 + 注释 (键表/fromToml/README 三处早有,
+  播种模板漏 — 新用户首跑播种看不见该键, getOrElse 默认 16 兜底; max 当场裁定修).
+- 顺修同病灶 (自我描述失实): [structure]/[features] 模板段头 + features 字段 javadoc 的
+  "B1 骨架占位 / L3/L4 真地物载荷占位" 正名; 车道节段头注释 "异步车道四键 (骨架空载荷,
+  B2 起消费)" → 车道配置键 (该节实有 11 键, "四键" 数值失实) — L61 为二轮新增顺修, 已呈 max.
+- 手术复盘 (协作质量): 一轮手写切片犯双 off-by-one (L222 插入头/中重叠复制 async 行 — 断言
+  不可见; L217 替换尾未跳原行 — 原行幸存被陈旧措辞断言拦下), 零落盘; 二轮 Apply-Ops 的
+  L231 post 锚写错行 (段头与 enabled 间还有总开关注释行, 读模板跳行), 陈旧措辞断言前置再拦,
+  仍零落盘; 三轮锚修正后全绿. 教训: 锚必须从回执现场逐行抄, 不可凭记忆写; 先断言后落盘的
+  纪律两轮连本带利回本.
+- 零行为变化 (模板仅首次播种用, 已有 toml 的环境不受影响); version 维持 0.1.1; 构建+部署
+  同步; commit + push 同批.

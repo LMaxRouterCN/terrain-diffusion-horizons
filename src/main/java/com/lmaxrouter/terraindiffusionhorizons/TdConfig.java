@@ -58,7 +58,7 @@ public final class TdConfig {
      *  若实测 DH 采样使两色分家, 开此即启用 (TdFlowerMap 草池数据已备). */
     public boolean grassColoring = false;
 
-    // ---- [B1] 异步车道四键 (docs/batch-b-design.md §4.1; 骨架空载荷, B2 起消费) ----
+    // ---- 车道配置键 ([structure]/[features]; B1 四键立骨架 [docs/batch-b-design.md §4.1], B2/C/L4 逐批扩充至 11 键) ----
 
     /** [structure] 结构车道总开关: false = 结构车道不计算 (B2 载荷: TdStructureOracle 同源撒点). */
     public boolean structureEnabled = true;
@@ -74,7 +74,7 @@ public final class TdConfig {
     /** [structure] 贴地换色深度 (B 案: 埋地结构顶段距地表 <= 此值时表面 1 格换结构块色; 负 = 关闭). */
     public int structureSurfaceBlendDepth = 3;
 
-    /** [features] 地物车道总开关 (L3/L4 真地物载荷占位; L1 花草色斑是同步快路径, 开关在 [vegetation] 段). */
+    /** [features] 地物车道总开关 (vanilla 群系装饰复刻, L4; L1 花草色斑是同步快路径, 开关在 [vegetation] 段). */
     public boolean featuresEnabled = true;
 
     /** [features] 地物车道异步 (语义同 structure.async). */
@@ -214,12 +214,14 @@ public final class TdConfig {
             grassColoring = false
 
             [structure]
-            # 结构 LOD 车道 (B1 骨架占位, B2 起接入同源撒点计算).
+            # 结构 LOD 车道 (vanilla 同源撒点 + 哑世界组装 + 列段折叠, B2/L3/L4).
             # 总开关: false = 结构车道不计算.
             enabled = true
             # 异步: true = 地形 LOD 先发布, 结构算完自动刷新补全 (不拖慢地形出图);
             #       false = 同步模式, 地形 LOD 扣住等结构算完才显示 (一次成型, 无刷新闪烁).
             async = true
+            # 扫描外扩 (chunk): bbox 跨 region 界的结构防截断 (默认 16 = 256 块 >= mansion 尺度).
+            pad_chunks = 16
             # 列折叠段数上限 (C-light): 结构列按方块变化切多段 (小屋的腿/板/顶, 树的干/叶),
             # 1 = 旧单段行为 (配置级回滚); 段多越忠实, FPS 代价越高, 实测权衡.
             column_segments = 6
@@ -228,7 +230,7 @@ public final class TdConfig {
             surface_blend_depth = 3
 
             [features]
-            # 地物 LOD 车道 (L3/L4 真地物载荷占位; L1 花草色斑是同步快路径, 开关在上方 [vegetation] 段, 不受此段影响).
+            # 地物 LOD 车道 (vanilla 群系装饰复刻, L4; L1 花草色斑是同步快路径, 开关在上方 [vegetation] 段, 不受此段影响).
             # 总开关: false = 地物车道不计算.
             enabled = true
             # 异步: 语义同 [structure].async.
