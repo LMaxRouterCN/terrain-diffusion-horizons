@@ -586,7 +586,6 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
 - 注记: 方格 (案④) max 未单独回报, prefetch 已落地, 下次留意; pale_garden biome WARN ×1 = DH 自身噪声 (1.20.1 无此 biome).
 - commit: 车道 + 排障修复打包一 commit (中途未打过 F 批中间态, 按文件拆会把修复混入, 历史失真), version 0.1.0 → 0.1.1 (0.1.0 已以坏行为版本存在过).
 - 遗留: ①②③ 已于 2026-11-25 全部收口 (树格退役执行 / §7 排版销案·现场核查正常 / 锚清理 ~462MB), 见下方 "2026-11-25 · 退役+清理案卷".
-- 遗留: ①TdVegetationMap 退役 (决策④) ②设计稿 §7 排版事故 (勘误块拦腰截表) ③锚清理待 max: mods 0.1.0.jar.bak-20261125 + .bak-20261123 + (15)库 .bak-20261125 (329MB) + D:\temp\dh-sqlite-bak-20261124.
 
 ## 2026-11-25 · 退役+清理案卷 (L1 树格退役 / 锚清理 / §7 销案)
 
@@ -607,7 +606,13 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
   块 L153-158 在表后 — 旧记录 "拦腰截断" 失实 (疑施工期已顺手修复未记), 无残留动作.
 - README 同步: vegetation.coloring 描述改花草色斑 (旧 "树冠近似" 文案自 11-18 断开起失实
   7 天), 架构表 TdVegetationMap 行删 (双语), 数据流段树冠措辞改并补车道输入.
-- 遗留 (呈 max): ①README 性能节 "ArrayList(3) 预分配 / 段数上限 3" 疑随 C/D 批过时 (代码
-  grep 见当轮日志, 未动) ②英文 Installation 后 L246-252 疑裸 TOML 无围栏 (当轮日志有现场,
-  未动) ③EN L316 "64 blocks per column" 措辞疑旧错 (dl0 一列 = 1 块, [长期记忆: 123]; CN
-  对照行未读, 未动) ④dl1+ 远景无树 = 11-18 起现状, 高 detail 植被归后续路线 ⑤push 未决.
+- 遗留更新 (2026-11-25 README 修复批): ①②③ 已修 (见下方 README 修复案卷) ④dl1+ 远景无树 = 11-18 起现状, 高 detail 植被归后续路线 ⑤push 本批执行 (a77b033 + README commit 同推). 新增呈 max: ⑥TdConfig 播种模板漏 pad_chunks (播种级缺口, 并下个代码批否).
+
+## 2026-11-25 · README 修复案卷 (全文事实巡检 + push)
+
+- 动机: 退役批手术中逮到 EN 配置节结构腐烂 (Dependencies 节躺着键表 / Installation 后裸 TOML / Configuration 残段), 批范围扩为全文事实巡检 (max 批 "俩小活直接干").
+- 修复 (README 双语 20 处): EN Dependencies 节换回真依赖表 (配置键表系历批错插未清), Installation 补第 4 步 + 删裸 TOML 残段, Configuration 键表补全 (含 L4 四键) + toml 示例重建; CN toml 示例重建 ([terrain] 三键归位, useBiomeSurface 旧块写进 [features] 段 = 播种级错误) + 键表补 L4 四键; Known Limitations 首条重写 ("无地物与结构" 自 B 批起失实 → 同源近似 + 折损要点); Features 补结构/装饰两弹; How-It-Works 补车道小节; 架构表 6 行类清单 → 23 类按包分组 (双语); dl0 行 "64 块/列" 勘误 (一列 = 1 块, [长期记忆: 123]); 性能节 "段数上限 3" 勘误 (ArrayList(3) = 容量提示).
+- 根因层: 配置三件套 (键表 / toml 示例 / 播种模板) 互为对账单却从未对账 — B1 加键只动键表, C/D 加段只动 CN toml 且改坏 (terrain 键漂出段头), L4 四键从未入档, EN 节序错插无人巡检. 教训: 配置面改动 = 三处同步 + 双语对称, 缺一即烂.
+- 顺修: 退役批的 GOAL-PLAN 尾行替换实际未删旧行 (numstat 25/0 纯增量铁证, 陈旧行残留), 本批删除; 手术函数补 head/tail 边界守卫 (首行/末行操作时 PowerShell 降序区间回卷风险).
+- 呈 max: TdConfig 播种模板漏 pad_chunks (键表/fromToml/README 三处有, 播种不写 — 新用户播种看不见该键, getOrElse 默认 16 兜底; 并下个代码批否).
+- push: 本 commit 与 a77b033 同推 origin master.
