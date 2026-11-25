@@ -32,7 +32,7 @@ description = '''${description}'''
 [[dependencies.terraindiffusionhorizons]]
     modId = "distanthorizons"
     mandatory = false
-    versionRange = "[2.3, 9.4)" # 上界放宽: 2.4 挡 DH 3.3.3 开机 (采纳自 max 实测手改)
+    versionRange = "[3,)" # 3 以上, 无上界 (max 裁决 2026-11-26; 坑史: 上界 2.4 曾挡 DH 3.3.3 开机)
     ordering = "AFTER"
     side = "BOTH"
 
