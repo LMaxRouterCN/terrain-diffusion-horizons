@@ -11,7 +11,7 @@ https://github.com/xandergos/terrain-diffusion-mc/issues/260
 
 目前不支持 Voxy：现有的 1.20.1 版本不够稳定（个人体验），ARR 许可证也是个麻烦；给 Voxy 做加速，相当于我要实现一个 1.20.1 版的、自生成区块的 Voxy——即使不全部自己写，也需要吃透相关 fork——工作量不现实。1.20.1 之后的版本应该也不会转向 Voxy。
 
-## 性能 / Performance
+## 性能
 
 实测（Ryzen 5 5600X + NVIDIA CMP 30HX，原版渲染距离 5 + DH 渲染距离 512）：
 
@@ -24,14 +24,14 @@ TD 世界缩放 6：稳态约 700 chunks/s，峰值约 1500 chunks/s。
 
 世界刚创建时 DH 需要预热：大量区块入队并预处理，此期间不会生成 LOD；随后有一小段低速生成期，之后进入正常速度。
 
-## 已知限制 / Known Limitations
+## 已知限制
 
-- **远景结构与植被是近似还原，不是逐块复刻**：位置和内容由同种子下的原版生成规则决定，但每列只保留少数几层方块（默认上限 6 层，`column_segments`）。已知缺失：沙漠没有仙人掌和枯灌木、没有红树林、水面没有植物、树顶不积雪等。
+- **远景结构与植被是近似还原，不是逐块复刻**：位置和内容由同种子下的原版生成规则决定，但每列只保留少数几层方块（默认上限 6 层，`column_segments`）。已知缺失：沙漠没有仙人掌和枯灌木、没有红树林、水面没有植物等;树顶积雪以自上而下染白树叶的形式呈现,而非原版的雪片方块。
 - **河岸的沙/砾分布与原版有偏差**：这些是原版在群系交界处的细碎点缀，尺度太小，远景采样拿不到
 - **远景呈台阶状**：越远的一格代表的地越宽，远处几何呈台阶状，是 LOD 的固有特性，无法避免
 - **河谷色带**：远处沿河可见一条色调略异的窄带。河流在数据里是独立群系，草色与两岸略有差异；近距离原版会在群系边界做颜色渐变，远景每格只带一个群系的颜色、没有渐变，差异就以带状露出来
 
-## 特性 / Features
+## 特性
 
 - AI 地形模型直接出 LOD，跳过真实 chunk 生成
 - 群系驱动表面方块：草/沙/雪等地表与原版一致
@@ -42,48 +42,48 @@ TD 世界缩放 6：稳态约 700 chunks/s，峰值约 1500 chunks/s。
 - 正确的群系颜色：远景的草色/水色与近处一致
 - 纯桥接层：无 mixin、无 Access Transformer、无反射
 
-## 依赖与版本 / Dependencies
+## 依赖与版本
 
-| 依赖 | 版本 |
-|---|---|
-| Minecraft | 1.20.1 |
-| Forge | 47.2.30 |
-| Distant Horizons | 3.3.3 |
-| Terrain Diffusion | 1.20.1 |
+| 依赖              | 版本    |
+| ----------------- | ------- |
+| Minecraft         | 1.20.1  |
+| Forge             | 47.2.30 |
+| Distant Horizons  | 3.3.3   |
+| Terrain Diffusion | 1.20.1  |
 
 TDH 针对 DH 3.3.3 开发并实测通过。其余版本未测试。
 
-## 安装 / Installation
+## 安装
 
 1. Forge 47.2.30 (1.20.1)
 2. `mods/` 放入三个 jar：Distant Horizons、Terrain Diffusion、TDH
 3. 按 Terrain Diffusion 的方式创建世界；进世界后 TDH 自动接管远景生成（日志可见 `TDH 生成器注册完成`），非 TD 世界自动退回 DH 原生生成
 4. 确认 DH 的 Distant Generation 已开启
 
-## 配置 / Configuration
+## 配置
 
 配置文件：`config/terrain-diffusion-mc/terrain-diffusion-horizons.toml`（首次运行自动生成，带注释说明）
 
-| 键 | 默认 | 说明 |
-|---|---|---|
-| `general.enabled` | `true` | 总开关，false = 关闭 TDH，DH 自己生成远景 |
-| `terrain.surfaceBlock` | `minecraft:stone` | 兜底表面方块（群系表面关闭或解析失败时使用） |
-| `terrain.fillerBiome` | `minecraft:plains` | 兜底群系（群系表面关闭时使用，影响远景草色） |
-| `terrain.useBiomeSurface` | `true` | 表面方块按群系（与原版一致）；false = 关闭（省内存，全用兜底方块） |
-| `terrain.surfaceBlockOverrides` | `{}` | 按群系指定地表方块（没指定的群系用默认） |
-| `vegetation.coloring` | `true` | 花草色斑：远景草地上按该群系花的密度点缀花色（只换颜色，高度不变） |
-| `vegetation.grassColoring` | `false` | 草丛色斑（默认关：远景里草丛与草方块本就同色，一般无需开） |
-| `structure.enabled` | `true` | 远景结构总开关 |
-| `structure.async` | `true` | 异步：先出地形，结构算完自动补上；false = 等结构算完一起显示（无刷新闪烁） |
-| `structure.pad_chunks` | `16` | 扫描外扩（区块数）：防止横跨边界的大型结构被截断 |
-| `structure.column_segments` | `6` | 结构每列的方块层数上限；1 = 旧行为（单层）；层数多还原度高、渲染开销大 |
-| `structure.surface_blend_depth` | `3` | 埋地结构表面染色深度（路/农田等）；负数 = 关闭 |
-| `features.enabled` | `true` | 远景植被总开关（上面的花草色斑是独立开关，不受此项影响） |
-| `features.async` | `true` | 同 structure.async |
-| `features.decoration_steps` | `["vegetal_decoration", "top_layer_modification"]` | 参与远景植被的生成步（合法值见配置文件注释，大小写不敏感）；空数组 = 关闭植被 |
-| `features.decoration_max_detail_level` | `0` | 档位上限：更远的档位不跑植被（0 = 默认，只最近档位跑） |
-| `features.decoration_prefetch` | `true` | 高度修正：修远景植被的方格状错位和错位的树；false = 关闭修正 |
-| `features.decoration_water_background` | `true` | 水面判定：修湖上浮树浮花；依赖上一项（高度修正） |
+| 键                                     | 默认                                               | 说明                                                                                 |
+| -------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `general.enabled`                      | `true`                                             | 总开关，false = 关闭 TDH，DH 自己生成远景                                            |
+| `terrain.surfaceBlock`                 | `minecraft:stone`                                  | 兜底表面方块（群系表面关闭或解析失败时使用）                                         |
+| `terrain.fillerBiome`                  | `minecraft:plains`                                 | 兜底群系（群系表面关闭时使用，影响远景草色）                                         |
+| `terrain.useBiomeSurface`              | `true`                                             | 表面方块按群系（与原版一致）；false = 关闭（省内存，全用兜底方块，花草色斑一并失效） |
+| `terrain.surfaceBlockOverrides`        | `{}`                                               | 按群系指定地表方块（没指定的群系用默认）                                             |
+| `vegetation.coloring`                  | `true`                                             | 花草色斑：远景草地上按该群系花的密度点缀花色（只换颜色，高度不变）                   |
+| `vegetation.grassColoring`             | `false`                                            | 草丛色斑（默认关：远景里草丛与草方块本就同色，一般无需开）                           |
+| `structure.enabled`                    | `true`                                             | 远景结构总开关                                                                       |
+| `structure.async`                      | `true`                                             | 异步：先出地形，结构算完自动补上；false = 等结构算完一起显示（无刷新闪烁）           |
+| `structure.pad_chunks`                 | `16`                                               | 扫描外扩（区块数）：防止横跨边界的大型结构被截断                                     |
+| `structure.column_segments`            | `6`                                                | 结构每列的方块层数上限；1 = 旧行为（单层）；层数多还原度高、渲染开销大               |
+| `structure.surface_blend_depth`        | `3`                                                | 埋地结构表面染色深度，只对会改造地表的结构（路/农田等）生效；负数 = 关闭             |
+| `features.enabled`                     | `true`                                             | 远景植被总开关（上面的花草色斑是独立开关，不受此项影响）                             |
+| `features.async`                       | `true`                                             | 同 structure.async                                                                   |
+| `features.decoration_steps`            | `["vegetal_decoration", "top_layer_modification"]` | 参与远景植被的生成步（合法值见配置文件注释，大小写不敏感）；空数组 = 关闭植被        |
+| `features.decoration_max_detail_level` | `0`                                                | 负数 = 关闭远景植被；调大无效果（当前仅最近档位有数据）                              |
+| `features.decoration_prefetch`         | `true`                                             | 高度修正：修远景植被的方格状错位和错位的树；false = 关闭修正                         |
+| `features.decoration_water_background` | `true`                                             | 水面判定：修湖上浮树浮花；依赖上一项（高度修正）                                     |
 
 ```toml
 [general]
@@ -120,20 +120,20 @@ decoration_water_background = true
 
 内存注意：`useBiomeSurface=true` 约 520MB，false 约 150MB（实测）。
 升级新版本后新增键不显示在文件里时，删除 toml 让它重新生成即可。
-配置改动需重进世界生效。
+配置改动需重启游戏生效。
 
-## 实现原理 / How It Works
+## 实现原理
 
 ### 架构：纯桥接层
 
-无 mixin、无 Access Transformer、无反射，全部走两端公开 API：DH 的 `DhApi.worldGenOverrides` 与 TD 的 `LocalTerrainProvider` 静态门面。23 个类、三个包，职责正交：
+无 mixin、无 Access Transformer、无反射，全部走两端公开 API：DH 的 `DhApi.worldGenOverrides` 与 TD 的 `LocalTerrainProvider` 静态门面。23 个类、四个包，职责正交：
 
-| 包 | 职责 |
-|---|---|
-| 根包 | mod 入口 + 播种式 TOML 配置（`TerrainDiffusionHorizons` / `TdConfig`） |
-| `dh` | DH 注册与生命周期（`DhCompat`）、LOD 翻译核心（`TdDhWorldGenerator`）、坐标翻译（`TdLodTranslator`）、群系表面/花草表（`TdSurfaceBlockMap` / `TdFlowerMap`）、车道刷新钩子（`DhRefreshHook`） |
-| `dh.lane` | 异步车道骨架：纯函数核心 + 调度外壳 + 载荷与缓存键（B1） |
-| `dh.structure` | 结构撒点（vanilla 同 seed 数学）、哑世界组装、群系装饰（B2/L3/L4） |
+| 包             | 职责                                                                                                                                                                                          |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 根包           | mod 入口 + 播种式 TOML 配置（`TerrainDiffusionHorizons` / `TdConfig`）                                                                                                                        |
+| `dh`           | DH 注册与生命周期（`DhCompat`）、LOD 翻译核心（`TdDhWorldGenerator`）、坐标翻译（`TdLodTranslator`）、群系表面/花草表（`TdSurfaceBlockMap` / `TdFlowerMap`）、车道刷新钩子（`DhRefreshHook`） |
+| `dh.lane`      | 异步车道骨架：纯函数核心 + 调度外壳 + 载荷与缓存键（B1）                                                                                                                                      |
+| `dh.structure` | 结构撒点（vanilla 同 seed 数学）、哑世界组装、群系装饰（B2/L3/L4）                                                                                                                            |
 
 注册链：mod 构造期挂 `DhApiLevelLoadEvent` → 世界加载回调 → 三重守卫（主世界 / TD 世界激活 / seed 可得）→ `registerWorldGeneratorOverride`。世界卸载无反注册 API，由生成器自身 `close()` 清引用。只在主世界工作（硬边界）。
 
@@ -219,7 +219,7 @@ When a world is freshly created, DH needs a warm-up: a large batch of chunks is 
 
 ## Known Limitations
 
-- **Distant structures and vegetation are approximations, not block-exact replicas**: positions and content follow vanilla's generation rules under the same seed, but each column keeps only a few block layers (default cap 6, `column_segments`). Known gaps: no cactus or dead bushes in deserts, no mangrove trees, no aquatic plants, no snow on tree canopies, among others.
+- **Distant structures and vegetation are approximations, not block-exact replicas**: positions and content follow vanilla's generation rules under the same seed, but each column keeps only a few block layers (default cap 6, `column_segments`). Known gaps: no cactus or dead bushes in deserts, no mangrove trees, no aquatic plants, among others. Snow on tree canopies appears as a top-down white tint on the foliage rather than vanilla's snow layers.
 - **Riverbank sand/gravel scatter differs from vanilla**: these are vanilla's fine trimmings at biome borders, at a scale too small for distant sampling to pick up
 - **LOD staircase**: at distance one cell covers a wider patch of terrain, so far geometry looks stepped. Inherent to LOD, no fix
 - **River valley tint band**: a narrow strip of slightly off tint along rivers, visible at distance. Rivers are a distinct biome in the data, with grass color slightly different from the banks; vanilla blends colors across biome borders up close, while each distant cell carries a single biome color with no blending, so the difference shows as a band
@@ -237,12 +237,12 @@ When a world is freshly created, DH needs a warm-up: a large batch of chunks is 
 
 ## Dependencies
 
-| Dependency | Version |
-|---|---|
-| Minecraft | 1.20.1 |
-| Forge | 47.2.30 |
-| Distant Horizons | 3.3.3 |
-| Terrain Diffusion | 1.20.1 |
+| Dependency        | Version |
+| ----------------- | ------- |
+| Minecraft         | 1.20.1  |
+| Forge             | 47.2.30 |
+| Distant Horizons  | 3.3.3   |
+| Terrain Diffusion | 1.20.1  |
 
 TDH is developed and tested against DH 3.3.3; other versions are untested.
 
@@ -257,26 +257,26 @@ TDH is developed and tested against DH 3.3.3; other versions are untested.
 
 Config file: `config/terrain-diffusion-mc/terrain-diffusion-horizons.toml` (generated on first run, with comments explaining each key)
 
-| Key | Default | Description |
-|---|---|---|
-| `general.enabled` | `true` | Master switch; false = TDH off, DH generates distant terrain on its own |
-| `terrain.surfaceBlock` | `minecraft:stone` | Fallback surface block (used when biome surface is off or resolution fails) |
-| `terrain.fillerBiome` | `minecraft:plains` | Fallback biome (used when biome surface is off; affects distant grass color) |
-| `terrain.useBiomeSurface` | `true` | Biome-driven surface blocks, as in vanilla; false = off (saves memory, the fallback block is used everywhere) |
-| `terrain.surfaceBlockOverrides` | `{}` | Per-biome surface block overrides (unlisted biomes use the default) |
-| `vegetation.coloring` | `true` | Flower speckle: distant grassland gets flower colors at the biome's natural flower density (color only, height unchanged) |
-| `vegetation.grassColoring` | `false` | Grass speckle (off by default: distant tall grass and grass blocks already share one color) |
-| `structure.enabled` | `true` | Distant structures master switch |
-| `structure.async` | `true` | Async: terrain appears first, structures fill in when done; false = wait for structures (no refresh flicker) |
-| `structure.pad_chunks` | `16` | Scan padding (chunks): keeps large structures straddling borders from being clipped |
-| `structure.column_segments` | `6` | Block layers per structure column; 1 = legacy single layer; more layers = more faithful, more render cost |
-| `structure.surface_blend_depth` | `3` | Buried-structure recolor depth (roads, farmland); negative = off |
-| `features.enabled` | `true` | Distant vegetation master switch (flower speckle above has its own switch) |
-| `features.async` | `true` | Same as `structure.async` |
-| `features.decoration_steps` | `["vegetal_decoration", "top_layer_modification"]` | Generation steps to run (valid values in the config file comments, case-insensitive); empty array disables vegetation |
-| `features.decoration_max_detail_level` | `0` | Detail-level cutoff: regions at farther detail levels skip vegetation (0 = default, only the closest level runs it) |
-| `features.decoration_prefetch` | `true` | Height fix: fixes grid-shaped artifacts and misplaced trees at distance; false = off |
-| `features.decoration_water_background` | `true` | Water check: fixes trees and flowers floating on lakes; needs the height fix on |
+| Key                                    | Default                                            | Description                                                                                                                     |
+| -------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `general.enabled`                      | `true`                                             | Master switch; false = TDH off, DH generates distant terrain on its own                                                         |
+| `terrain.surfaceBlock`                 | `minecraft:stone`                                  | Fallback surface block (used when biome surface is off or resolution fails)                                                     |
+| `terrain.fillerBiome`                  | `minecraft:plains`                                 | Fallback biome (used when biome surface is off; affects distant grass color)                                                    |
+| `terrain.useBiomeSurface`              | `true`                                             | Biome-driven surface blocks, as in vanilla; false = off (saves memory, fallback block everywhere; flower speckle turns off too) |
+| `terrain.surfaceBlockOverrides`        | `{}`                                               | Per-biome surface block overrides (unlisted biomes use the default)                                                             |
+| `vegetation.coloring`                  | `true`                                             | Flower speckle: distant grassland gets flower colors at the biome's natural flower density (color only, height unchanged)       |
+| `vegetation.grassColoring`             | `false`                                            | Grass speckle (off by default: distant tall grass and grass blocks already share one color)                                     |
+| `structure.enabled`                    | `true`                                             | Distant structures master switch                                                                                                |
+| `structure.async`                      | `true`                                             | Async: terrain appears first, structures fill in when done; false = wait for structures (no refresh flicker)                    |
+| `structure.pad_chunks`                 | `16`                                               | Scan padding (chunks): keeps large structures straddling borders from being clipped                                             |
+| `structure.column_segments`            | `6`                                                | Block layers per structure column; 1 = legacy single layer; more layers = more faithful, more render cost                       |
+| `structure.surface_blend_depth`        | `3`                                                | Buried-structure recolor depth, only for structures that reshape the surface (roads, farmland); negative = off                  |
+| `features.enabled`                     | `true`                                             | Distant vegetation master switch (flower speckle above has its own switch)                                                      |
+| `features.async`                       | `true`                                             | Same as `structure.async`                                                                                                       |
+| `features.decoration_steps`            | `["vegetal_decoration", "top_layer_modification"]` | Generation steps to run (valid values in the config file comments, case-insensitive); empty array disables vegetation           |
+| `features.decoration_max_detail_level` | `0`                                                | Negative = disables vegetation; raising it does nothing (only the nearest detail level gets data currently)                     |
+| `features.decoration_prefetch`         | `true`                                             | Height fix: fixes grid-shaped artifacts and misplaced trees at distance; false = off                                            |
+| `features.decoration_water_background` | `true`                                             | Water check: fixes trees and flowers floating on lakes; needs the height fix on                                                 |
 
 ```toml
 [general]
@@ -313,20 +313,20 @@ decoration_water_background = true
 
 Memory note: `useBiomeSurface=true` is about 520MB, false about 150MB (measured).
 If new keys added by an upgrade do not show up in the file, delete the toml and it regenerates.
-Config changes take effect after re-entering the world.
+Config changes take effect after restarting the game.
 
 ## How It Works
 
 ### Architecture: a pure bridge layer
 
-No mixins, no Access Transformers, no reflection—everything goes through the two sides' public APIs: DH's `DhApi.worldGenOverrides` and TD's `LocalTerrainProvider` static facade. 23 classes across three packages, orthogonal responsibilities:
+No mixins, no Access Transformers, no reflection—everything goes through the two sides' public APIs: DH's `DhApi.worldGenOverrides` and TD's `LocalTerrainProvider` static facade. 23 classes across four packages, orthogonal responsibilities:
 
-| Package | Responsibility |
-|---|---|
-| root | mod entry + seeded TOML config (`TerrainDiffusionHorizons` / `TdConfig`) |
-| `dh` | DH registration and lifecycle (`DhCompat`), LOD translation core (`TdDhWorldGenerator`), coordinate translator (`TdLodTranslator`), biome surface/flower tables (`TdSurfaceBlockMap` / `TdFlowerMap`), lane refresh hook (`DhRefreshHook`) |
-| `dh.lane` | async lane skeleton: pure-function core + scheduling shell + payloads and cache keys (B1) |
-| `dh.structure` | structure spread (vanilla same-seed math), silent-world assembly, biome decoration (B2/L3/L4) |
+| Package        | Responsibility                                                                                                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| root           | mod entry + seeded TOML config (`TerrainDiffusionHorizons` / `TdConfig`)                                                                                                                                                                   |
+| `dh`           | DH registration and lifecycle (`DhCompat`), LOD translation core (`TdDhWorldGenerator`), coordinate translator (`TdLodTranslator`), biome surface/flower tables (`TdSurfaceBlockMap` / `TdFlowerMap`), lane refresh hook (`DhRefreshHook`) |
+| `dh.lane`      | async lane skeleton: pure-function core + scheduling shell + payloads and cache keys (B1)                                                                                                                                                  |
+| `dh.structure` | structure spread (vanilla same-seed math), silent-world assembly, biome decoration (B2/L3/L4)                                                                                                                                              |
 
 Registration chain: the mod constructor hooks `DhApiLevelLoadEvent`, then the world-load callback runs a triple guard (overworld / TD world active / seed obtainable) and calls `registerWorldGeneratorOverride`. There is no unregister API on world unload; the generator clears its own references in `close()`. Overworld only (hard boundary).
 

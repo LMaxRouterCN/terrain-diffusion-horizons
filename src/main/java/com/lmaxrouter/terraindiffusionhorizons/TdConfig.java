@@ -37,7 +37,7 @@ public final class TdConfig {
 
     // ---- 配置字段 (与 TOML 键一一对应; 默认值 = 字段初始化值) ----
 
-    /** [general] 总开关: false = 不注册生成器, DH 走原生路径 (改动需重进世界生效). */
+    /** [general] 总开关: false = 不注册生成器, DH 走原生路径 (改动需重启游戏生效). */
     public boolean enabled = true;
 
     /** [terrain] 表面方块 fallback (原版 ID): useBiomeSurface=false 或群系解析失败时使用 (纯几何模式旧路径). */
@@ -185,11 +185,11 @@ public final class TdConfig {
     private static final String TEMPLATE = """
             # ============================================================
             # Terrain Diffusion Horizons 配置
-            # 修改后重进世界生效 (每次进世界时读取).
+            # 修改后重启游戏生效 (游戏启动时读取一次).
             # ============================================================
 
             [general]
-            # 总开关: false = 关闭本模组, DH 自己生成远景 (需重进世界生效).
+            # 总开关: false = 关闭本模组, DH 自己生成远景 (需重启游戏生效).
             enabled = true
 
             [terrain]
