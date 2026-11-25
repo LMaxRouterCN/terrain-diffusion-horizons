@@ -391,7 +391,8 @@ DH generateLod 坐标语义定案 (2026-11-15 数据正确性案根因, javap+�
 tag: DistantHorizons, TDH项目, bug根因, 坐标语义, javap
 <!-- END:088 -->
 <!-- ID:089 -->
-2026-11-17 TD_MIRROR 漏设三犯定案 (035 一犯白绕12回合 / 089 初版二犯 / 本日三犯白耗两轮): TDH L1 构建裸跑 gradlew build 又漏四件套, 补齐后 22s 绿。四件套 = TD_MIRROR=1 + GRADLE_USER_HOME=F:\MOVED\.gradle + JAVA_HOME=E:\Java\Zulu\zulu-17 + TEMP=TMP=D:\temp。程序性结论: 本机跑任何 TD 系 gradlew (TD fork / TDH) 开工第一件事 = 四件套, 无例外; TD_MIRROR 是 init.d 镜像闸门, 不设 = neoform-runtime 死走 maven.neoforged.net (SNI 阻断) 且 NFRT 不进 modules-2 缓存, --offline 也救不了 (089 初版正文保留机制分析)。TDH 与 TD fork 构建差异: TDH 单项目扁平结构, gradlew 直接在仓库根跑; TD fork 必须 cd versions\1.20.1 跑 buildForgeWindows。TDH 全缓存命中 build --offline 约 13~22s。
+TD 系构建四件套纪律 (035 一犯 / 089 初版二犯 / 11-17 三犯 / 11-21 四犯 / 165 五犯 / 11-25 六犯): 本机跑任何 TD 系 gradlew (TD fork / TDH) 开工第一件事 = 四件套 TD_MIRROR=1 + GRADLE_USER_HOME=F:\MOVED\.gradle + JAVA_HOME=E:\Java\Zulu\zulu-17 + TEMP=TMP=D:\temp, 无例外. 不设 → neoform-runtime 死走 maven.neoforged.net (SNI 阻断, 见 032) 且走 C 盘默认空 home (F 盘真缓存根本没被碰), --offline 也救不了 (NFRT 不进 modules-2 缓存). TD_MIRROR 激活 init.d\td-mirror.init.gradle (C/F 双 home 同 MD5): 摘 neoforged 死仓 + 头插 D:\temp\td-maven 本地仓 (NFRT 1.0.13 + minecraft-dependencies 全套). TDH 与 TD fork 差异: TDH 单项目扁平, gradlew 直接仓库根跑; TD fork 须 cd versions\1.20.1 跑 buildForgeWindows (任务名 045). TDH 全缓存命中 build --offline 约 13~22s. [四犯性质最劣: 检索做了, 089 全文就在回执里, 药方看到了, 但脚本只喂 --offline 没喂四件套 = 知而不用; 执行前把四件套写进脚本第一行, 不要依赖"记得"] gradle daemon 被 agent 框架任务结束屠杀 → 每次构建冷启动 single-use daemon, 网络不可达时 createMinecraftArtifacts 工件解析必挂, 唯四件套救.
+[2026-11-25 六犯] 与四犯同性质原样复刻: compileJava 只喂 --offline 没喂四件套, createMinecraftArtifacts 解析挂 (GRADLE_USER_HOME 为空走 C 盘, TD_MIRROR 未设 TDMirror 未注入, neoform-runtime 1.0.13 死走 SNI 阻断仓). 165 (三天前) 的正解 "四件套+在线, 别加 --offline" 就在检索回执里 = 药方在眼皮底下没吃. 教训升级: TD 系 exec 跑 gradle 的肌肉记忆 = ①四件套写脚本第一行 ②默认在线 (mavenCentral 直连可达+TLS1.2 先钉: [Net.ServicePointManager]::SecurityProtocol = Tls12) ③--offline 只在确认任务 UP-TO-DATE 时才允许. 四件套+--offline 在 createMinecraftArtifacts 重执行时也必死 (nashorn 传递依赖双缺, 见 165).
 tag: 构建坑, 构建配方, TDH项目, terrain-diffusion-horizons, TD_MIRROR, 网络环境
 <!-- END:089 -->
 <!-- ID:090 -->
@@ -709,3 +710,120 @@ tag: TDH项目，bug根因，C批，FeaturePoolElement，地物，结构
 2026-11-21 C批结案(commit=bcc2d12, 实测全过): ①surfaceHint 2.0: 埋地过滤窗口判定源改为 structure piece 的 terrainAdaptation — beard 系留 blendDepth 窗口(吸收 TD 高度场不知放置挖空的假埋深, 窗口内表面1格贴地换色), none/bury 窗口0(埋深>0不渲染). 效果=恶地矿井板色闪烁消失. ②bug#2 根因: TdSilentLevel.getRawBrightness 抛 UnsupportedOperationException → FeaturePoolElement 放置期全灭(旧实测110条 placeInChunk 失败warn); 修复=兜底返回15, 复测归零. ③DH缓存库按世界存 saves/<世界名>/data/DistantHorizons.sqlite, 清缓存须连 -wal/-shm 伴随文件, 删前记录大小+mtime. ④坑: TEST 实例 saves 下16个世界全是"新的世界 (N)"系列命名, 脚本引用须精确目录名(-eq). ⑤日志验证方法论: 用旧会话归档gz解压grep校准关键词命中数, 再对新latest.log同词对比归零 → 排除grep词打偏的假绿. ⑥.agent/ 目录随代码 commit 是仓库既有惯例(d92519f/0790b59/753154f 均含), 上轮误判排除后已补交.
 tag: TDH项目, C批, bug根因, 案卷, 测试环境
 <!-- END:159 -->
+<!-- ID:160 -->
+[2026-11-22 E批定谳] DH sqlite FullData V2 blob 格式(逆向自 DistantHorizons-3.3.3 字节码+PY验证):
+counts×3844 varint(裸size) → id打包流 varint(v>>2=pid, bit0=bottom跟随旗, bit1=light跟随旗) → h绝对varint流(无条件) → zz bottom流(仅bit0=1段, bottom_k=prevBottom-h_k+delta, carry跨列, init=0, prevBottom更新为bottom_k) → light字节流(仅bit1=1段, 1字节=(blockLight<<4)|skyLight).
+列序x外z内[1,63), index=i=X*64+Z(x外z内), 世界Y=rel-64, 顶帽AIR top恒801(本世界存储天顶). Mapping=biome+"_DH-BSW_"+blockstate, AIR特记.
+真实性签名: 真实区块cell=11.4段/列+矿石段265+洞穴空气7447+地下液4074 | 纯生成cell=2.2-2.8段/列全零.
+sqlite仅FullData+BeaconBeam(空), 无渲染缓存表. 解码器: D:\temp\tdh_wide.py / tdh_zoom.py / tdh_verify.py / tdh_final.py 的 decode() 函数(PY+zstd).
+tag: TDH项目, DistantHorizons, sqlite, blob格式, 逆向, 字节码
+<!-- END:160 -->
+<!-- ID:161 -->
+[2026-11-22 E批判决] 恶地"沟里木板"之谜(世界15):
+判别题答案=木板(dark_oak_planks地板+rail顶+偶发poppy), 但沟的实体=表面材质替换条带(深1-3格, 地形高度不变Y65同周围), 非凹陷地形. "沟深几十格"当前库不存在(全盒最低Y62=海面, 宽沟聚类零簇), 三候选待裁定: 旧版数据(C/D批前)/印象合体/视觉错觉.
+走近消失五环: ①sT<=coverTop边缘翻转(走廊原生顶Y65 vs 各DL采样Y63-66) ②跨DL相位偏移(DL0暴露X-1488/DL1 X-1487/DL2 X-1486) ③DL2采样窗更厚(planks3格+rail上poppy) ④走近真实区块替换DL0(真实cell签名11.4段+矿石+洞穴, 零矿井方块=真实走廊在地下) ⑤跨DL高度漂移(DL4 med+2, 恶地极值+34幻影塔).
+修复方向: A根本=结构发射门控跨DL一致化(判定用结构原生坐标+确定性高度, 与LOD采样网格解耦) / B=TD高度采样一致性 / C第二bug=村庄悬空((-667,2451) DL0悬空jungle_slab下垫AIR vs DL1-3立dark_oak_log[66..74]高8格) / D=门控收紧.
+判决书: D:\temp\E批判决.md. 验证tp: -1487 80 2620(远看条带)/-1488 70 2615(DL0暴露)/-667 75 2451(悬空)/-1112 100 1512(DL4幻影).
+tag: TDH项目, bug根因, 沟里木板, 判决, 恶地
+<!-- END:161 -->
+<!-- ID:162 -->
+[2026-11-22 事故教训] exec指令通道三个坑:
+①指令内PY/PS代码绝不出现三联反引号——会搅乱框架code块解析, 且后续所有exec收到的文本都被污染($py被吃成py/引号变形/减号变形/大小写折叠), 一个废稿污染整轮.
+②废稿绝不发, 要删整段删(here-string头 @' 之后必须紧跟换行, 跟任何字符都ParserError).
+③write指令不存在, 写文件用exec+python open()(PY)或[IO.File]::WriteAllText(PS, 带UTF8Encoding($false)).
+④控制台GBK乱码是纯噪音: PY双写UTF-8日志文件(Get-Content -Encoding UTF8读回), 脚本加-u.
+tag: PokerAgent, 坑, exec指令, 转义
+<!-- END:162 -->
+<!-- ID:163 -->
+[1.20.1字节码判决 2026-11-23] StructurePlacement freq门四reducer(javap srg jar, 调用参数序=seed,salt字段,chunkX,chunkZ,freq):
+DEFAULT=WithSalt(seed,salt,x,z)+nextFloat<freq (salt顶x位, vanilla错位调用)
+legacy_type_1=setSeed((x>>4 ^ (z>>4)<<4) ^ seed)+nextInt丢弃+nextInt((int)(1/freq))==0
+legacy_type_2=WithSalt(seed,x,z,10387320)+nextFloat<freq (10387320=老矿井salt, 即1.13~1.17矿井门数学的封存)
+legacy_type_3=setLargeFeatureSeed(seed,x,z)+nextDouble<freq; 其中setLargeFeatureSeed=setSeed(seed);l=nextLong();m=nextLong();setSeed(x*l^z*m^seed) (xor形, 与1.12.2同源, 无|1)
+WithSalt=setSeed(x*341873128712L+z*132897987541L+seed+salt)
+mineshafts.json=legacy_type_3+freq 0.004 → vanilla 1.20.1矿井门=xor搅拌+nextDouble. SpreadCore现行type_3门(WithSalt(10387320)+nextFloat)是legacy_type_2数学, 错位.
+tag: legacy_type_2, legacy_type_3, 判决, 字节码, worldgen种子链, 结构, 矿井, freq门
+<!-- END:163 -->
+<!-- ID:164 -->
+[2026-11-23 E批修复落地·终验闭环] SpreadCore 频率门 type_2/type_3 数学对调修复全案闭环: commit d016b21 (+10/-7, 两case对调+[长期记忆:163]引用), BUILD SUCCESSFUL 22s (四件套+在线, 配方见165), 部署 TEST 实例 (hash 对账, 旧版备份 .jar.bak-20261123). max 实地终验通过: /tp -1488 80 2620 (V6 实地五发位) DH 幽灵矿井走廊消失, 频率门计算与 vanilla 实际生成对齐. 影响面 = mineshafts(type_3) + buried_treasures(type_2) 双结构, 宝藏侧依拍板不验 (数学同源). 根因与证据链全档见记忆 163. 遗留小账 (非阻塞): ①TdStructureAssembleCore.java 编译 deprecation 注记 (既有代码, 非本轮引入, 未查); ②.agent/ 三文件 git 常脏 (框架状态, 归置权 max).
+tag: TDH项目, terrain-diffusion-horizons, bug根因, freq门, legacy_type_2, legacy_type_3, 矿井, 结构, 里程碑, 验证, 已闭环
+<!-- END:164 -->
+<!-- ID:165 -->
+[2026-11-23 TDH offline 死因与在线配方, 089 边界补充] TD_MIRROR 四件套 + --offline 在 createMinecraftArtifacts 要求重执行时必死: NFRT 传递依赖 nashorn-core-15.3 既不在 TDMirror (D:\temp\td-maven 仅 NFRT 本体 + minecraft-dependencies) 也不在 F 盘 modules-2\files-2.1 (列目录实证). 089 "offline 13~22s 全缓存命中"的隐含前提 = 任务 UP-TO-DATE 不触发解析. 正解 = 四件套 + 在线 build: repo.maven.apache.org 直连可达 (HEAD 200, PS 5.1 先钉 TLS1.2), 全程 22s 绿, bat = D:\temp\tdh-build-run.bat (schtasks 脱离进程树 + 4min 轮询 exit 标记, 复用 037). 遗留小谜 (未实证, ~75% 信度): 在线 build 绿但 F 盘无 nashorn 目录, 疑 gradle 仅拉 metadata 即过 artifactManifestEntries 求值, jar 本体从未下载. 另: 本轮裸跑四件套 = 第五犯, 089 药方 (写死脚本第一行) 当轮已执行.
+tag: 构建坑, gradle, TD_MIRROR, nashorn, offline, 网络环境, TDH项目, terrain-diffusion-horizons
+<!-- END:165 -->
+<!-- ID:166 -->
+biome链v3真相(2026-11-23全源码实证, 推翻"biome面零改动"结论): ①vanilla装饰期BiomeFilter用WGR自己的BiomeManager(WGR构造L101: new BiomeManager(this, BiomeManager.obfuscateSeed(levelSeed))), 非ServerLevel真身 ②LevelReader.getNoiseBiome是default方法(L63): 先getChunk(quart→section, ChunkStatus.BIOMES, false)查chunk palette, null才退getUncachedNoiseBiome直采 — 任何"透传真身manager=直采不碰chunk存储"的说法都漏了这跳chunk hop ③值等价是精确的: BiomeManager.getBiome=pos-2偏移+8角fiddle投票, 角全落整数quart坐标; palette灌值=quart网格TDBS采样→同cell逐角同值 ④ServerChunkCache.getChunk off-thread分支(L117)=CompletableFuture.supplyAsync(mainThreadProcessor).join() 同步阻塞等主线程 — 异步线程(DH数据源车道)经真level查biome=每次一个主线程round trip, 值对路径错 ⑤通用修法: 包装层持本地new BiomeManager(wrapper自身, obfuscateSeed(worldSeed)), wrapper.getNoiseBiome override为TDBS直采→全链异步线程私有; BiomeManager.withDifferentSource=换源保种现成工具 ⑥obfuscateSeed=sha256(worldSeed), MinecraftServer L337全维度同一j
+tag: TDH项目，terrain-diffusion-horizons，biome，BiomeManager，勘误，坑，L4，线程
+<!-- END:166 -->
+<!-- ID:167 -->
+[PokerAgent replace 指令坑图 2026-11-23 合并版]
+① replace 无 -after/追加参数 (11-23 实证: 我凭直觉捏造 -after 发出, 指令块首行解析失败后正文被逐行当指令执行, 8 行未知指令零副作用) — 铁律: 未实测过的参数必先 @@help, 选项全集 = -a/-i/-l/-s/-w/-f, 无其他。
+② 文件末尾追加 = 锚行法: replace -l <末行号>, 新文本 = 末行原文 + 新内容 (GOAL-PLAN F 批条目实证落地)。
+③ 内容匹配模式 (无 -l) 两代码块顺序与文档矛盾 (11-23 单例: 第二块被当查找文本): 内容匹配一律禁用, 全用 -l 行号模式。
+④ 范围替换 (-l a-b) 后行号整体下移, 同轮后续指令按新行号算; 新文本含文件已有行 (如合计行) 时必查替换范围是否吃到原行, 否则该行重复 (双合计行事故实证)。
+⑤ 回执"已替换 N 处"= 被替换行数, 非匹配处数。
+exec 坑保留: Get-Content 管道 Select-String 多命中时 .LineNumber 是数组, 直接算术报 op_Subtraction 无方法错, 须 [0] 或 foreach; moj 目录同源双文件 (level_ / world_level_ 前缀) 会双倍匹配行。
+tag: 坑, PokerAgent, replace指令, exec指令
+<!-- END:167 -->
+<!-- ID:168 -->
+2026-11-24 L4排障实证 (TD fork LocalTerrainProvider 1440L):
+fetchHeightmap 分支序: resident(真值缓存)命中→真值; miss且inFarLookup→approximateHeightmap(独立LRU 64条, 不与真region混缓存); 非far-lookup→genHeightmap(GPU真值).
+FarLookupHeightMixin 查询界=tileSize对齐(默认256), 水面=max(床,SEA_LEVEL=63), 不读riverWaterSurface → 高地湖锚湖床.
+近似路径3参构造无riverWater/snowLayers → 冷tile雪深回落1层.
+推论: AssembleCore全程far-lookup → 装饰锚定=热tile真值/冷tile近似, 渲染侧getRiverTerrainData(真值,待读内部确认) → 双源逐tile错位 = L4方格候选根因; L3结构同样锚近似(beard/blendDepth吸收误差故未显).
+tag: TDH项目，far-lookup，近似高度，坑，L4
+<!-- END:168 -->
+<!-- ID:169 -->
+2026-11-24 L4排障全案根因闭环 (源码级实证, TD fork + TDH 全链读毕):
+[案①浮树浮花] far-lookup 水面=max(湖床,SEA_LEVEL=63) (FarLookupHeightMixin L60-61); MOTION_BLOCKING/WORLD_SURFACE 谓词含水→湖上锚水面; OCEAN_FLOOR→湖床. 修复=View三态背景(OCEAN_FLOOR以下solid, OF~WS间water, WS以上air, 双type高度查询, heightCache type分桶现成); 尾巴=高地河 waterSurf 两套差几格(far-lookup不知waterSurf), 精确对齐需View直查TD三件套.
+[案④方格] 装饰(TDH车道线程, far-lookup内, 高度走mixin+biome走TDBS L148→fetchHeightmap) vs 渲染(INFERENCE_EXECUTOR线程隔离→buildRiverTerrainData L954→hydrologyProvider.getRegion真值)双源; 冷tile=approximateHeightmap(高度双线性差几米+biome 512格硬切一格一biome), 热tile=resident真值; 边界=2048格hydrology tile冷热+512biome双层方格; 近似路径不调noteTerrainInterest→冷区永远近似=稳态. TD作者LTP L544注释预言过"chunks built on approximate terrain". 修复=方案A: AssembleCore开far-lookup前非far-lookup prefetch fetchHeightmap(region+pad界), 冷区走genHeightmap阻塞GPU(车道后台无感), 驻留后全resident真值, 三修(高度/biome/warmer), PENDING去重与渲染共享.
+[案②cocoa] vanilla decorator bug, 治理=warn去重. [案③鸡] getLevel()真身通道, P3后置. [雪盖] SnowAndFreezeMixin在LOD路径活跃(真身链激活), 近似无snowLayers→冷tile雪深回1层.
+[max判别项] 方格走近消失否/错树=丛林树否(cocoa簇-160..-185,216..236)/开阔地雪盖分片/湖海拔.
+tag: bug根因，TDH项目，L4，修复方案，far-lookup，terrain-diffusion-horizons
+<!-- END:169 -->
+<!-- ID:170 -->
+[2026-11-24 日志编码假阴案] TEST实例latest.log是GBK编码(中文Windows JVM默认file.encoding, 非UTF-8). PS7默认按UTF-8读→中文全乱码→中文关键词grep全0命中=假阴(英文关键词不受影响). 字节级铁证: '水'GBK字节CB AE被当UTF-8解码=U+02EE'ˮ', '态'GBK CC AC=U+032C'̬', 乱码样本(ˮ)/̬逐一对应. 正确读法: [IO.File]::Open(path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite) + New-Object IO.StreamReader($fs,[Text.Encoding]::GetEncoding(936)) — FileShare.ReadWrite 同时解决游戏运行中文件占用. 注意: TDH源码文件是UTF-8读取正常, 与日志编码不同; grep中文关键词前先判文件编码. 另: 乱码样本可逆向解读(GBK字节按UTF-8读的映射固定), 不全是废信息.
+tag: 坑, 日志, 编码, PowerShell, 测试环境, TDH项目
+<!-- END:170 -->
+<!-- ID:171 -->
+[TDH L4 装饰异常案·案卷终稿 2026-11-24]
+现象: 湖中树立水中 / UOE 85,670次 / IOOBE 148次(cocoa126+beehive22) / 湖上浮花浮草(已修:三态背景).
+
+根因链(三次反转后全链实证):
+①getHeight 类型抹平: View 对所有 Heightmap.Types 一律 convert(TD surface). vanilla 语义: 表面族(WORLD_SURFACE*/MOTION_BLOCKING*, 水计入表面)→水面首自由格; OCEAN_FLOOR*族(水不计)→床. 抹平→植被 depth filter(水深>0拦截)旁路→湖中树(REPLACEABLE_BY_TREES json 实锤含水, 干照放).
+②getLightEngine 未实现: SnowAndFreeze→shouldSnow/shouldFreeze→getBrightness(LightLayer.BLOCK)<10→UOE. 字节码: 只查 BLOCK 不查 SKY; warmEnoughToRain 早退→仅冷区炸(768个满64冷区=完整冷群系带).
+③冻结 heightCache: 树基=TD地形高, 不响应先序写入; 干柱撞已写入非可替换方块(结构材料/先序树干)→placeLog 逐格 fail(返回值被 pop, 干放置永不中断)→logs 空→decorator get(0) 于空 list 炸. vanilla live heightmap 会把后树基抬到先序写入顶上.
+
+修复包(待拍板): ①View.getHeight 水列分流(表面族=convert(surface)水面首自由格; OCEAN_FLOOR*维持床; 窗外回退现状) ②TdSilentLevel.getBrightness(LightLayer,BlockPos) SKY→15/BLOCK→0 ③View.setBlock 成功写后按 type.isOpaque() 谓词维护每列 writtenTop, getHeight=max(TD值, writtenTop首自由格). 关键红利: Types.isOpaque() 是 public 谓词访问器(javap实锤), 零硬编码. ③一并治 IOOBE/树叠树/结构顶长树.
+
+关键 vanilla 事实(javap+json 实证, 勿信直觉): REPLACEABLE_BY_TREES 含水/草/leaves(20项); placeTrunk 丢弃 placeLog 返回值; tryPlaceLeaf 有 WATERLOGGED 自动置位(树穿水=沼泽语义, 唯一闸门是 depth filter); SnowAndFreeze=逐列取 MOTION_BLOCKING 自由格, freeze 查 y-1 流体, snow 查 y 空气; 日志口径: 事件行仅每 region 每签名首条打出, 汇总行=真值; pad=2(12x12窗/8步长推进), 窗角 2x2 四-pass 交叠 by design(确定性种子+各自 clip), 观察期密度数据除 2.25.
+
+教训: 本案直觉两次翻车(记忆称 REPLACEABLE_BY_TREES 无水; IOOBE 正则写死 "Index 0" 漏检 156 条) — 结论必须实证.
+tag: TDH项目，L4, bug根因，修复方案，案卷，勘误，教训，terrain-diffusion-horizons
+<!-- END:171 -->
+<!-- ID:172 -->
+[TDH L4 结案 2026-11-25] commit b5751aa (10文件 +1102/-12), version 0.1.0→0.1.1, 已部署 TEST mods (MD5对账过). 内容 = F批装饰车道整批(TdBiomeDecorator/TdDecorateLevelView 新文件+接线)+L4排障三案修复(getHeight表面族水列分流/getBrightness SKY15 BLOCK0/writtenTops列顶簿记). 验收: 清DH库从零实跑107,075行, UOE 85670→0, IOOBE 148→0, 三态(水)18195行零回退, 湖中树/树叠树/结构顶长树消失, 冷区雪盖+水岸冰恢复, max肉眼过. 关键诊断教训: F批部署后max"还是原样"=329MB旧DH库回放坏LOD(零复制锚名隔离后新库从零长458MB才见真修复) — "改了没效果"先查缓存回放, 别急着怀疑代码. git commit message中文走 -F+UTF-8无BOM消息文件+事后字节级对比, 回显乱码是通道假象. replace指令坑: 内容匹配模式旧/新文本必须两个code块, 行号模式最稳.
+tag: TDH项目, L4, terrain-diffusion-horizons, 案卷, 验收, 缓存回放
+<!-- END:172 -->
+<!-- ID:173 -->
+[TDH L1 树格退役结案 2026-11-25] commit a77b033 (5文件 +42/-482): TdVegetationMap.java 整删(288行/29群系统计表, git可溯), Generator 定点手术(树格块/vegEnabled死门/ColumnStyle四字段/resolveStyle池构造/Biome import, 816→641行), 花草层不连坐(vegetationColoring/TdFlowerMap/VegPool/FlowerStyle/帽段全留, 裁决原文"vegetationColoring归还花草上色层"[126]). 行为零变化(删除对象11-18起恒不可达), version维持0.1.1, mods 88,879B部署MD5过. 手术法: PowerShell全内存Apply-Ops(行号+锚点断言, 失败零写入)+自底向上防位移. 教训: 开关类grep必须查精确名(vegEnabled小写v漏在'Vegetation'盲区)+决策文档前提句逐字读("现vegEnabled恒关"被我读反一次). 同案: 锚清理~462MB四件(最大(15)库坏缓存329MB; D:\temp备份是目录155MB, Remove-Item需-Recurse否则NonInteractive拒删), 设计稿§7排版事故销案(现场核查正常, 旧记录失实).
+tag: TDH项目, terrain-diffusion-horizons, 植被, 案卷, 退役
+<!-- END:173 -->
+<!-- ID:174 -->
+[TDH README 腐烂案·结案 2026-11-25] commit bea70b6 (+99/-64), push 已随 a77b033 同发 origin (b5751aa..bea70b6, local==remote 对账过). 修复内容: EN Dependencies 节错插的键表换回真依赖表/Installation 补第4步删裸TOML残段/Configuration 键表 6→18 行(补 L4 四键)+toml重建; CN toml重建(useBiomeSurface 漂段播种级错误修正)+键表补4键; Known Limitations 首条"无地物与结构"重写(B批起失实→同源近似+折损); 架构表 6行→23类按包分组(双语); dl0"64块/列"勘误(一列=1块[123]); 性能节"段数上限3"勘误. 根因: 键表/toml示例/播种模板互为对账单却从未对账 — 配置面改动必须三处同步+双语对称, 教训入档. 手术工具: PowerShell Apply-Ops + head/tail 边界守卫(PS降序区间末行回卷bug的根治, 退役批numstat 25/0教训); toml围栏用[char]96构造免转义. 遗留呈max: TdConfig播种模板漏pad_chunks(三处有播种无, 纯文档级, getOrElse兜底).
+tag: TDH项目, terrain-diffusion-horizons, README, 案卷, 结案
+<!-- END:174 -->
+<!-- ID:175 -->
+[TDH pad_chunks 播种补档·结案 2026-11-25] commit 95ce296 (TdConfig +10/-4, GOAL-PLAN +19/-2), push 已对账 (bea70b6..95ce296), 部署 TEST mods 88,961B MD5 过. 内容: TEMPLATE [structure] 段补 pad_chunks=16+注释; 顺修同病灶 = [structure]/[features] 模板段头 + L77 javadoc + L61 节头 "B1 骨架占位/四键" 措辞正名 (B2/L3/L4 已落地, 该节实 11 键). 零行为变化 (模板仅首跑播种). version 维持 0.1.1.
+[手术通用教训·三轮复盘] ① 手写切片易双 off-by-one (插入头/中重叠复制行 — 断言不可见; 替换尾未跳原行 — 原行幸存), 用带 pre/post 锚 + head/tail 守卫的 Apply-Ops 函数, 不手搓; ② post 锚必须从回执现场逐行抄 (读模板时跳行 = 凭记忆写锚 = 错); ③ 后验断言清单: 行数精确值 + 易复制行的出现次数恰等 (抓静默重复) + 过时措辞零残留; ④ 先断言后落盘纪律 — 两轮全拦在写入前, 磁盘/git 零污染. 落盘用保序函数 (检测原 CRLF/LF/尾换行/BOM, 模板串内容随源行尾走).
+tag: TDH项目, terrain-diffusion-horizons, 案卷, 结案, 技巧
+<!-- END:175 -->
+<!-- ID:176 -->
+PokerAgent 通道坑 (2026-11-25 实测, 两次复现): 同一对 cmd 标签内放多条指令时, 回执只解析第一条, 其余全部报"未知指令", 连 code 标签内容都被逐行拆解解析 — 多段指令块解析不稳定. 实践纪律: 一次对话只发一条指令块 (单行或多行单指令), 单条模式回执干净. 另: 手术脚本后验黑名单在英文区要用正则 \b 词边界匹配, 否则禁词 segment 会误伤合法键名 column_segments (_ 是词字符, 不产生词边界); 中文区保持子串匹配.
+tag: PokerAgent, exec指令, 坑, 技巧, TDH项目
+<!-- END:176 -->
+<!-- ID:177 -->
+2026-11-26 TDH README 核查结案: A/B/D/E/F 已修(README 13处+TdConfig 3处注释+两配置表重排对齐)。mods.toml DH 依赖 max 裁决 "[3,)" 无上界(原话"3以上就行,9.4不要了"; 坑史: 上界2.4曾挡DH3.3.3开机)。跨会话技术事实: (1)配置读取=游戏启动时一次, 改动需重启游戏生效; (2)surface_blend_depth 只对 beard 系结构(surfaceHint 标记, 路/农田)生效, none/bury 真埋不换色; (3)useBiomeSurface=false 时花草色斑连带全灭(链: biomeIdx null→fallback 无 flower); (4)decoration_max_detail_level 调大无效, TDH 只对 dl0 供数据, 负值=关装饰。G 未结: README L29"水面没有植物/树顶不积雪"需进游戏实测(L4 三态水背景+writtenTops+亮度放行部件已齐)。
+tag: TDH项目, 案卷, 勘误, 结案
+<!-- END:177 -->

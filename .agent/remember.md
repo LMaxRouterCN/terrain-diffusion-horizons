@@ -1,1 +1,6 @@
-[D批·码在, build挂网络, offline重试 2026-11-21 23:4x] 三明治代码已写入Generator(816行, 锚点10/10过)但javac未验: 上轮build挂createMinecraftArtifacts解析neoform-runtime 1.0.13, maven.neoforged.net超时(DNS污染), 编译前的工件任务. 诱因: 任务结束框架杀gradle daemon→冷启动→POM缓存TTL过期→重拉→网络炸(此前热daemon免检). 部署/删world15 sqlite/commit全未发生(mods还是C批jar 2A0B). 本轮: [0]代理速查 [1]cache盘点 [2]--offline构建 [3]部署+MD5 [4]删world15 sqlite(wal/shm) [5]commit D批(同批补.agent). 若offline挂: memory网络配方搜索结果在手→代理/镜像/hosts抛max. 测点: ①海里monument/沉船(俯视可能仍水色=topmost, 斜角/剖面看) ②山壁矿井剖面 ③scol村庄路不回归 ④FPS(列段~3→~15) ⑤日志grep gap/overlap+placeInChunk. max令: 照做不画蛇添足. C批=bcc2d12+c849ad7.
+TDH 文档核查+修正任务已全部完成 (等 max 决定是否 commit)。
+已修: A生效时机5处(README中英2+TdConfig3, 模板L188双错双修)/B四包2处/D/E/F误导文案6处(README两表)/mods.toml DH依赖 [3,)(max裁决: 3以上就行,9.4不要了)。
+表格重排: 我改的6条说明超列宽, 两表40行padding重排+2行separator横杠加长, 对齐断言单值86/129通过, 去空白内容守恒0漂移(仅2行横杠预期加长)。
+备份: C:\Users\LLL95\AppData\Local\Temp\tdh-readme-pre-align.md。
+G项(README L29 水面植物/树顶积雪)仍留进游戏实测后处理。
+未动: max手改(标题去重/表格对齐基线)保留, .agent/记忆系统文件变动非我改。
