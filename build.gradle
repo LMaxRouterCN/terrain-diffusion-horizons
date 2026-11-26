@@ -107,3 +107,24 @@ jar {
         ])
     }
 }
+// 分发产物文件名: <模组名>-<版本>+<mc版本>+<加载器>-<编译时间戳>.jar (max 2026-11-26 指令)
+// 例: terrain-diffusion-horizons-1.0.0+1.20.1+forge-20261126113000.jar
+// 配方移植自 TD fork versions/1.20.1/build.gradle L228-251 [长期记忆: 060]:
+// - 时间戳 = 构建配置时刻 (yyyyMMddHHmmss), 只进文件名, 不进 version/MANIFEST/mods.toml
+// - 同一 gradle 进程共用同一时间戳 (rootProject.ext 守卫缓存; TDH 单项目暂无兄弟消费者, 保同构防将来多模块)
+// - 惰性求值是硬要求: configureEach 在任务创建瞬间同步触发, 文件名必须包 Provider 延迟到
+//   任务执行期求值 (fork multiloader 侧曾因非惰性在动态引用 sourcesJar 时触发崩溃)
+// - 只重命名最终分发产物 reobfJar (MDG legacyforge 把 jar 产物留在 devlibs 作 mojmap 开发包,
+//   reobfJar 输出 SRG 分发包到 libs); 上游 jar 保持默认命名, 中间产物改名会断下游任务链
+String tdhLoader = 'forge' // TDH 仅 Forge 1.20.1 (settings.gradle 单项目扁平, 无 loader 子项目名可取)
+if (!rootProject.ext.has('tdhBuildTimestamp')) {
+    rootProject.ext.tdhBuildTimestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern('yyyyMMddHHmmss'))
+}
+tasks.withType(AbstractArchiveTask).matching { Task archiveCandidate ->
+    archiveCandidate.name == 'reobfJar'
+}.configureEach { archiveTask ->
+    archiveTask.archiveFileName = project.provider {
+        String archiveVersionText = archiveTask.archiveVersion.getOrNull()?.toString() ?: version.toString()
+        return "${rootProject.name}-${archiveVersionText}+${minecraft_version}+${tdhLoader}-${rootProject.ext.tdhBuildTimestamp}".toString() + '.jar'
+    }
+}
