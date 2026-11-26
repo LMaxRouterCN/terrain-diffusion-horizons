@@ -107,9 +107,9 @@ public final class TdSurfaceBlockMap {
         def("minecraft:frozen_ocean", "minecraft:gravel", "minecraft:gravel", true);
         def("minecraft:deep_frozen_ocean", "minecraft:gravel", "minecraft:gravel", true);
 
-        // ---- 河流: 河岸草主导 (vanilla 河群系 surface = grass), 河床归水强度分档 [C], 冻河冰盖; underwater 字段 fluvial 列不消费 (死字段) ----
+        // ---- 河流: 河岸草主导 (vanilla 河群系 surface = grass), 河床归水强度分档 [C]; 冻河同为 snow precip 群系, 河岸实为草+顶雪层, 补齐 [B1/B2] 统一 snow_block 近似, 冰盖仍开; underwater 字段 fluvial 列不消费 (死字段) ----
         def("minecraft:river", "minecraft:grass_block", "minecraft:sand", false);
-        def("minecraft:frozen_river", "minecraft:grass_block", "minecraft:sand", true);
+        def("minecraft:frozen_river", "minecraft:snow_block", "minecraft:sand", true);
 
         // ---- 下界/末地/洞穴/虚空: 主世界 tile 不应出现 (分类器 canGenerateOverworld 过滤), 防御 fallback ----
         def("minecraft:nether_wastes", "minecraft:stone", "minecraft:dirt", false);

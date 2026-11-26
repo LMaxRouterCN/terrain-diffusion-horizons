@@ -284,7 +284,9 @@ public class TdDhWorldGenerator implements IDhApiWorldGenerator {
                     if (fluvialCol) {
                         int gx = b[1] + x; // b = [i1(Z起), j1(X起), i2, j2] -> gx/gz = 世界块坐标
                         int gz = b[0] + z;
-                        int h = (gx * 0x9E3779B9 + gz * 0x85EBCA6B) >>> 24; // 确定性散列取高 8 位 [0,255]
+                        // [C] 河床分档散列升级: 线性乘加空间纹理复杂度低, LOD 跳步抽样混叠成有序宽条纹 (max 实测"河床沙砾有序"); 换 mix64 非线性流, 乘子/盐刻意区别于花草流防系统性同位
+                        long bh = mix64(gx * 0xC2B2AE3D27D4EB4FL ^ gz * 0x9E3779B97F4A7C15L ^ 0x165667B19E3779F9L);
+                        int h = (int) (bh >>> 56); // 确定性散列取高 8 位 [0,255], 阈值/分档配比不变
                         bedBlock = strength < 72
                                 ? (h < 160 ? sandBlock : gravelBlock) // 弱水: 沙 62.5% / 砾 37.5%
                                 : (h < 218 ? gravelBlock : clayBlock); // 强水: 砾 85.2% / 黏土 14.8%
