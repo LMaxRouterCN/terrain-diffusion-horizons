@@ -646,3 +646,12 @@ W 必修 / A1 必修 / A2 必修 / B1 建议保 / B2 倾向改 / B3 倾向改 / 
   统一); "只覆地表字段"→"只改地表那一格".
 - max 授权: "干吧, 都听你的" (三裁量点均按我方倾向: 删 API 名/删 JSON 句/一 commit).
 - 零行为变化 (纯注释/文档); version 维持 0.1.1; 构建+部署同步; commit + push 同批.
+
+## 2026-11-26 · v1.0.0 发布 (两案并结 + 命名配方 + 首个稳定版)
+
+- 两案并结 (max 觉食裁决不实测直发): 案1 河床散列 = TdDhWorldGenerator 混列键改 mix64 非线性流 (键/阈值/配比不动, 根因=LOD 跳步抽样混叠成宽条纹); 案2 冻河河岸 = TdSurfaceBlockMap frozen_river surface grass_block→snow_block (B1/B2 雪盖系一近似: vanilla 冻河=草+顶雪层, LOD 单方块丢雪层露绿; 冰盖与 underwater 死字段不动, L110 注释同步)。
+- 版本 0.1.1→1.0.0: 0.1.1 期间 B2~F 批 (结构车道/L3 组装/L4 装饰/植被退役/README 清洗) 全未发版, 1.0.0 = 功能齐装后的首个稳定版。
+- 分发命名配方 (max 指令): 移植 TD fork versions/1.20.1/build.gradle L228-251, reobfJar 产物 = terrain-diffusion-horizons-1.0.0+1.20.1+forge-<时间戳>.jar; 时间戳=构建配置时刻, 只进文件名不进 version/MANIFEST/mods.toml (rootProject.ext 守卫缓存, Provider 惰性求值, 上游 jar 保持默认命名)。
+- 发布链: commit 四连 (fix/build/docs/chore) → tag v1.0.0 → push → gh release create (双语 notes + jar asset)。
+- TEST mods 换装 1.0.0 jar (旧 0.1.1 改 .bak 留档)。
+- 遗留: README L29 "水面没有植物" (G 案) 待进游戏实测。
